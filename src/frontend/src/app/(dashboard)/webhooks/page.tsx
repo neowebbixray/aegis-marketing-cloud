@@ -9,7 +9,6 @@ import {
   MoreHorizontal,
   ChevronLeft,
   ChevronRight,
-  Webhook,
   CheckCircle2,
   XCircle,
   AlertTriangle,
@@ -18,6 +17,7 @@ import {
   Copy,
   Eye,
 } from 'lucide-react';
+import { Webhook as WebhookIcon } from 'lucide-react';
 import { Button } from '@/components/atoms/button';
 import { Badge } from '@/components/atoms/badge';
 import { Input } from '@/components/atoms/input';
@@ -411,7 +411,7 @@ export default function WebhooksPage() {
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <div className="rounded-lg bg-primary/10 p-2">
-                            <Webhook className="h-4 w-4 text-primary" />
+                            <WebhookIcon className="h-4 w-4 text-primary" />
                           </div>
                           <div>
                             <p className="font-medium">{webhook.name}</p>

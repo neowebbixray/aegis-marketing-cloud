@@ -15,6 +15,11 @@ import {
   Settings,
   Menu,
   LayoutDashboard,
+  CreditCard,
+  Webhook,
+  ImageIcon,
+  BookOpen,
+  FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/atoms/button';
@@ -63,12 +68,30 @@ const navSections: NavSection[] = [
     ],
   },
   {
+    title: 'Analytics',
+    items: [
+      { title: 'Dashboards', href: '/analytics', icon: BarChart3 },
+      { title: 'Reports', href: '/analytics/reports', icon: FileText },
+    ],
+  },
+  {
     title: 'Settings',
-    items: [{ title: 'Settings', href: '/settings', icon: Settings }],
+    items: [
+      { title: 'Settings', href: '/settings', icon: Settings },
+      { title: 'Billing', href: '/billing', icon: CreditCard },
+      { title: 'Webhooks', href: '/webhooks', icon: Webhook },
+    ],
+  },
+  {
+    title: 'Content',
+    items: [
+      { title: 'Media Library', href: '/media', icon: ImageIcon },
+      { title: 'Knowledge Base', href: '/knowledge', icon: BookOpen },
+    ],
   },
 ];
 
-// ─── Sidebar Component ─────────────────────────────────────
+// ─── Icons ─────────────────────────────────────────────────
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const pathname = usePathname();

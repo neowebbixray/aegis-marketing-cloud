@@ -73,7 +73,7 @@ class KnowledgeDocument(BaseModel):
     source: Mapped[str | None] = mapped_column(String(100), nullable=True)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     tags: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True, default=list)
-    metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True, default=dict)
+    meta_data: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True, default=dict)
     embedding_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     chunk_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_indexed: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -116,7 +116,7 @@ class Message(BaseModel):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     tool_calls: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True, default=list)
     tool_call_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True, default=dict)
+    meta_data: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True, default=dict)
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
 

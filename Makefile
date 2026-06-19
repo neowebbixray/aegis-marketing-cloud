@@ -64,11 +64,15 @@ venv-clean: ## Remove Python virtual environment
 	@echo "✅ Virtual environment removed"
 
 # ── Docker Compose ──────────────────────────────────────────────────────────
-.PHONY: up up-d up-db down down-volumes restart logs status ps
+.PHONY: up up-d up-db down down-volumes restart logs status ps dev
 
 up: env ## Start all services (detached)
 	$(COMPOSE_CMD) up --build -d
 	@echo "✅ Stack started. Check status with 'make ps'"
+
+dev: env ## Start all services in foreground (dev mode)
+	$(COMPOSE_CMD) up --build
+	@echo "✅ Dev stack stopped"
 
 up-db: env ## Start only infrastructure services (Postgres, Redis, MinIO, RabbitMQ, Qdrant)
 	$(COMPOSE_CMD) up --build -d postgres redis minio rabbitmq qdrant
@@ -114,7 +118,7 @@ frontend-logs: ## Follow frontend logs
 	$(COMPOSE_CMD) logs -f frontend
 
 # ── Database Migrations ─────────────────────────────────────────────────────
-.PHONY: migrate migrate-create migrate-downgrade migrate-merge
+.PHONY: migrate migrate-create migrate-downgrade migrate-merge db-migrate db-rollback
 
 migrate: ## Apply all pending migrations
 	$(COMPOSE_CMD) exec -T backend alembic upgrade head
@@ -139,6 +143,11 @@ migrate-history: ## Show migration history
 
 migrate-current: ## Show current migration version
 	$(COMPOSE_CMD) exec -T backend alembic current
+
+db-migrate: migrate ## Apply all pending migrations (alias)
+
+db-rollback: ## Roll back one migration (alias: make db-rollback)
+	$(COMPOSE_CMD) exec -T backend alembic downgrade -1
 
 # ── Local migrations (without Docker) ───────────────────────────────────────
 .PHONY: migrate-local migrate-create-local
@@ -165,7 +174,7 @@ seed: ## Run seed data scripts
 	@echo "✅ Seed complete (seed script TBD)"
 
 # ── Testing ─────────────────────────────────────────────────────────────────
-.PHONY: test test-backend test-frontend test-all
+.PHONY: test test-backend test-frontend test-all test-coverage
 
 test-backend: ## Run backend tests (requires Docker stack running)
 	$(COMPOSE_CMD) exec -T backend pytest tests/ -v --cov=app --cov-report=term-missing

@@ -50,7 +50,7 @@ class Invoice(BaseModel):
     status: Mapped[str] = mapped_column(String(50), default="pending")
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     line_items: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True, default=list)
-    metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True, default=dict)
+    meta_data: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True, default=dict)
 
     def __repr__(self) -> str:
         return f"<Invoice {self.invoice_number}>"
@@ -83,7 +83,7 @@ class UsageRecord(BaseModel):
     metric: Mapped[str] = mapped_column(String(100), nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True, default=dict)
+    meta_data: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True, default=dict)
 
     def __repr__(self) -> str:
         return f"<UsageRecord {self.metric}: {self.quantity}>"

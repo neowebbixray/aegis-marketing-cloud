@@ -18,7 +18,7 @@ x-healthcheck: &default-healthcheck
   start_period: 30s
 
 services:
-  # ── Database ────────────────────────────────────────────────────────────────
+  # --- Database ---
   postgres:
     image: postgres:16-alpine
     container_name: amc-postgres
@@ -39,7 +39,7 @@ services:
       retries: 5
     logging: *default-logging
 
-  # ── Cache ────────────────────────────────────────────────────────────────────
+  # --- Cache ---
   redis:
     image: redis:7-alpine
     container_name: amc-redis
@@ -59,7 +59,7 @@ services:
       interval: 5s
     logging: *default-logging
 
-  # ── Object Storage ───────────────────────────────────────────────────────────
+  # --- Object Storage ---
   minio:
     image: minio/minio:latest
     container_name: amc-minio
@@ -78,7 +78,7 @@ services:
       interval: 15s
     logging: *default-logging
 
-  # ── Message Broker ───────────────────────────────────────────────────────────
+  # --- Message Broker ---
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: amc-rabbitmq
@@ -98,7 +98,7 @@ services:
       retries: 5
     logging: *default-logging
 
-  # ── Vector Database ──────────────────────────────────────────────────────────
+  # --- Vector Database ---
   qdrant:
     image: qdrant/qdrant:latest
     container_name: amc-qdrant
@@ -116,7 +116,7 @@ services:
       interval: 15s
     logging: *default-logging
 
-  # ── Backend (FastAPI) ────────────────────────────────────────────────────────
+  # --- Backend (FastAPI) ---
   backend:
     build:
       context: ../src/backend
@@ -131,6 +131,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://amc:amc_secret@postgres:5432/aegis_marketing_cloud
       - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
       - RABBITMQ_URL=amqp://amc:amc_secret@rabbitmq:5672/
       - QDRANT_URL=http://qdrant:6333
       - MINIO_ENDPOINT=minio:9000
@@ -141,7 +142,7 @@ services:
       - DEBUG=true
     volumes:
       - ../src/backend:/app
-      - /app/.venv  # prevent host venv from shadowing container
+      - /app/.venv
     depends_on:
       postgres:
         condition: service_healthy
@@ -156,7 +157,7 @@ services:
       interval: 15s
     logging: *default-logging
 
-  # ── Frontend (Next.js) ───────────────────────────────────────────────────────
+  # --- Frontend (Next.js) ---
   frontend:
     build:
       context: ../src/frontend
@@ -181,7 +182,7 @@ services:
         condition: service_healthy
     logging: *default-logging
 
-  # ── Mailhog (Dev Email) ──────────────────────────────────────────────────────
+  # --- Mailhog (Dev Email) ---
   mailhog:
     image: mailhog/mailhog:latest
     container_name: amc-mailhog

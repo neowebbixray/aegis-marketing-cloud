@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.v1 import ai, admin, analytics, auth, billing, crm, knowledge_base, marketplace, media, notifications, seo, social, tenants, webhooks
+from app.api.v1 import ai, admin, analytics, auth, billing, crm, health, knowledge_base, marketplace, media, notifications, seo, social, tenants, webhooks
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(ai.router)
@@ -23,3 +23,4 @@ router.include_router(notifications.router)
 router.include_router(marketplace.router)
 router.include_router(media.router)
 router.include_router(webhooks.router)
+router.include_router(health.router)

@@ -152,6 +152,58 @@ class Settings(BaseSettings):
         alias="TRUSTED_HOSTS",
     )
 
+    # ── MinIO / S3 ─────────────────────────────────────────────────────────────
+    minio_endpoint: str = Field(default="localhost:9000", alias="MINIO_ENDPOINT")
+    minio_access_key: str = Field(default="minioadmin", alias="MINIO_ACCESS_KEY")
+    minio_secret_key: str = Field(default="minioadmin", alias="MINIO_SECRET_KEY")
+    minio_use_ssl: bool = Field(default=False, alias="MINIO_USE_SSL")
+    minio_bucket_assets: str = Field(default="assets", alias="MINIO_BUCKET_ASSETS")
+    minio_bucket_media: str = Field(default="media", alias="MINIO_BUCKET_MEDIA")
+    minio_bucket_backups: str = Field(default="backups", alias="MINIO_BUCKET_BACKUPS")
+
+    # ── Stripe / Billing ────────────────────────────────────────────────────────
+    stripe_api_key: str | None = Field(default=None, alias="STRIPE_API_KEY")
+    stripe_webhook_secret: str | None = Field(default=None, alias="STRIPE_WEBHOOK_SECRET")
+    stripe_price_id_free: str | None = Field(default=None, alias="STRIPE_PRICE_ID_FREE")
+    stripe_price_id_pro: str | None = Field(default=None, alias="STRIPE_PRICE_ID_PRO")
+    stripe_price_id_enterprise: str | None = Field(default=None, alias="STRIPE_PRICE_ID_ENTERPRISE")
+
+    # ── SMTP / Email ─────────────────────────────────────────────────────────────
+    smtp_host: str = Field(default="localhost", alias="SMTP_HOST")
+    smtp_port: int = Field(default=1025, alias="SMTP_PORT")
+    smtp_user: str | None = Field(default=None, alias="SMTP_USER")
+    smtp_password: str | None = Field(default=None, alias="SMTP_PASSWORD")
+    smtp_from: str = Field(default="noreply@aegismc.com", alias="SMTP_FROM")
+    smtp_tls: bool = Field(default=False, alias="SMTP_TLS")
+
+    # ── Sentry / Error Tracking ──────────────────────────────────────────────────
+    sentry_dsn: str | None = Field(default=None, alias="SENTRY_DSN")
+    sentry_environment: str | None = Field(default=None, alias="SENTRY_ENVIRONMENT")
+
+    # ── OpenTelemetry ─────────────────────────────────────────────────────────────
+    otel_service_name: str = Field(default="aegis-marketing-cloud", alias="OTEL_SERVICE_NAME")
+    otel_exporter_otlp_endpoint: str | None = Field(default=None, alias="OTEL_EXPORTER_OTLP_ENDPOINT")
+
+    # ── n8n Workflow Engine ──────────────────────────────────────────────────────
+    n8n_url: str = Field(default="http://localhost:5678", alias="N8N_URL")
+    n8n_api_key: str | None = Field(default=None, alias="N8N_API_KEY")
+    n8n_webhook_url: str | None = Field(default=None, alias="N8N_WEBHOOK_URL")
+
+    # ── AI / LLM Provider ────────────────────────────────────────────────────────
+    ai_provider: str = Field(default="nvidia-nim", alias="AI_PROVIDER")
+    ai_model: str = Field(default="meta/llama-3.1-70b-instruct", alias="AI_MODEL")
+    nvidia_nim_api_key: str | None = Field(default=None, alias="NVIDIA_NIM_API_KEY")
+    nvidia_nim_base_url: str | None = Field(default=None, alias="NVIDIA_NIM_BASE_URL")
+    openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
+    anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
+    ollama_base_url: str = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
+
+    # ── Feature Flags ────────────────────────────────────────────────────────────
+    feature_ai_agents: bool = Field(default=True, alias="FEATURE_AI_AGENTS")
+    feature_marketplace: bool = Field(default=False, alias="FEATURE_MARKETPLACE")
+    feature_white_label: bool = Field(default=False, alias="FEATURE_WHITE_LABEL")
+    feature_billing_enabled: bool = Field(default=False, alias="FEATURE_BILLING_ENABLED")
+
     @field_validator("trusted_hosts", mode="before")
     @classmethod
     def parse_trusted_hosts(cls, v: str | list[str]) -> list[str]:

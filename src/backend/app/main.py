@@ -21,6 +21,7 @@ from app.api.v1 import router as v1_router
 from app.api.graphql.schema import graphql_router
 from app.config import settings
 from app.core.api_version import APIVersionMiddleware
+from app.core.config_validator import validate_config, halt_on_critical
 from app.core.exceptions import register_exception_handlers
 from app.core.metrics_middleware import PrometheusMetricsMiddleware
 from app.core.middleware import (
@@ -52,6 +53,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan: connect / disconnect the database pool."""
     _configure_logging()
     logger = logging.getLogger("amc")
+
+    # Validate configuration before starting
+    logger.info("Validating configuration…")
+    config_warnings = validate_config()
+    if settings.environment == "production":
+        halt_on_critical(config_warnings)
 
     logger.info("Starting %s — environment: %s", settings.app_name, settings.environment)
 
@@ -134,24 +141,12 @@ def create_app() -> FastAPI:
     app.include_router(graphql_router)
 
     # Health check
-    @app.get("/health", tags=["system"])
+    @app.get("/health", tags=["system"], include_in_schema=False)
     async def health_check() -> dict[str, Any]:
-        """Health check endpoint for load balancers and monitoring."""
-        db_ok = True
-        try:
-            async with engine.connect() as conn:
-                await conn.execute(
-                    __import__("sqlalchemy").text("SELECT 1")
-                )
-        except Exception:
-            db_ok = False
+        """Legacy health endpoint — delegates to the v1 health router."""
+        from app.api.v1.health import legacy_health
 
-        return {
-            "status": "healthy" if db_ok else "degraded",
-            "app": settings.app_name,
-            "version": "0.1.0",
-            "database": "connected" if db_ok else "disconnected",
-        }
+        return await legacy_health()
 
     return app
 

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Brain,
   Sparkles,
@@ -11,11 +12,17 @@ import {
   PenLine,
   Search,
   Wand2,
-  ArrowRight,
+  Plus,
   Loader2,
   Zap,
   Shield,
   Clock,
+  Cpu,
+  Bot,
+  Activity,
+  Play,
+  ArrowRight,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/atoms/button';
 import { Badge } from '@/components/atoms/badge';
@@ -36,47 +43,280 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/molecules/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/molecules/select';
 import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
 import { Textarea } from '@/components/atoms/textarea';
 import { Separator } from '@/components/atoms/separator';
 import { Skeleton } from '@/components/atoms/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
 import { toast } from 'sonner';
+import { aiApi } from '@/lib/api/ai';
+import { formatDateTime } from '@/lib/utils';
+import type { Agent, AgentStatus, AgentCapability } from '@/lib/api/ai';
 
-interface AIAgent {
-  id: string;
-  name: string;
-  description: string;
-  icon: React.ElementType;
-  color: string;
-  isAvailable: boolean;
+// ─── Constants ────────────────────────────────────────────────
+
+const statusConfig: Record<AgentStatus, { label: string; className: string }> = {
+  idle: { label: 'Idle', className: 'bg-muted text-muted-foreground' },
+  running: { label: 'Running', className: 'bg-success-100 text-success-800 dark:bg-success-900 dark:text-success-100' },
+  error: { label: 'Error', className: 'bg-destructive/10 text-destructive' },
+  paused: { label: 'Paused', className: 'bg-warning-100 text-warning-800 dark:bg-warning-900 dark:text-warning-100' },
+};
+
+const capabilityLabels: Record<AgentCapability, string> = {
+  content_generation: 'Content Gen',
+  classification: 'Classification',
+  sentiment_analysis: 'Sentiment',
+  lead_scoring: 'Lead Scoring',
+  email_composer: 'Email Composer',
+  chat: 'Chat',
+  summarization: 'Summarization',
+  translation: 'Translation',
+  image_analysis: 'Image Analysis',
+  recommendation: 'Recommendation',
+};
+
+const capabilityColors: Record<AgentCapability, string> = {
+  content_generation: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  classification: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+  sentiment_analysis: 'bg-pink-500/10 text-pink-600 dark:text-pink-400',
+  lead_scoring: 'bg-green-500/10 text-green-600 dark:text-green-400',
+  email_composer: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+  chat: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
+  summarization: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
+  translation: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
+  image_analysis: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+  recommendation: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+};
+
+const allCapabilities = Object.keys(capabilityLabels) as AgentCapability[];
+
+const agentTypeIcons: Record<string, React.ElementType> = {
+  content_generation: FileText,
+  classification: BarChart3,
+  sentiment_analysis: Activity,
+  lead_scoring: Target,
+  email_composer: MessageSquare,
+  chat: MessageSquare,
+  summarization: FileText,
+  translation: Brain,
+  image_analysis: Search,
+  recommendation: Zap,
+};
+
+// ─── Create Agent Dialog ──────────────────────────────────────
+
+function CreateAgentDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [capabilities, setCapabilities] = useState<AgentCapability[]>([]);
+  const [model, setModel] = useState('gpt-4');
+  const [temperature, setTemperature] = useState('0.7');
+  const [maxTokens, setMaxTokens] = useState('2048');
+  const [creating, setCreating] = useState(false);
+
+  const toggleCapability = (cap: AgentCapability) => {
+    setCapabilities((prev) =>
+      prev.includes(cap) ? prev.filter((c) => c !== cap) : [...prev, cap]
+    );
+  };
+
+  const handleCreate = async () => {
+    if (!name.trim()) {
+      toast.error('Agent name is required');
+      return;
+    }
+    if (capabilities.length === 0) {
+      toast.error('Select at least one capability');
+      return;
+    }
+
+    setCreating(true);
+    try {
+      await aiApi.createAgent({
+        name: name.trim(),
+        description: description.trim() || undefined,
+        capabilities,
+        model,
+        temperature: parseFloat(temperature),
+        max_tokens: parseInt(maxTokens, 10),
+      });
+      toast.success('Agent created successfully');
+      onOpenChange(false);
+      setName('');
+      setDescription('');
+      setCapabilities([]);
+      setModel('gpt-4');
+      setTemperature('0.7');
+      setMaxTokens('2048');
+      onCreated();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create agent');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Create AI Agent</DialogTitle>
+          <DialogDescription>
+            Configure a new AI agent with its capabilities and model settings
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="agent-name">Agent Name *</Label>
+            <Input
+              id="agent-name"
+              placeholder="e.g., Content Specialist"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="agent-desc">Description</Label>
+            <Textarea
+              id="agent-desc"
+              placeholder="What this agent does..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Capabilities *</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {allCapabilities.map((cap) => (
+                <label
+                  key={cap}
+                  className={`flex items-center gap-2 text-sm cursor-pointer rounded-lg border p-2 transition-colors ${
+                    capabilities.includes(cap)
+                      ? 'border-primary bg-primary/5'
+                      : 'hover:bg-muted'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={capabilities.includes(cap)}
+                    onChange={() => toggleCapability(cap)}
+                    className="rounded"
+                  />
+                  {capabilityLabels[cap]}
+                </label>
+              ))}
+            </div>
+          </div>
+          <Separator />
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="agent-model">Model</Label>
+              <Select value={model} onValueChange={setModel}>
+                <SelectTrigger id="agent-model">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gpt-4">GPT-4</SelectItem>
+                  <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
+                  <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
+                  <SelectItem value="claude-3-opus">Claude 3 Opus</SelectItem>
+                  <SelectItem value="claude-3-sonnet">Claude 3 Sonnet</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="agent-temp">Temperature</Label>
+              <Input
+                id="agent-temp"
+                type="number"
+                min={0}
+                max={2}
+                step={0.1}
+                value={temperature}
+                onChange={(e) => setTemperature(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="agent-tokens">Max Tokens</Label>
+              <Input
+                id="agent-tokens"
+                type="number"
+                min={256}
+                max={8192}
+                step={256}
+                value={maxTokens}
+                onChange={(e) => setMaxTokens(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleCreate} disabled={creating}>
+            {creating ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating...</>
+            ) : (
+              <><Sparkles className="mr-2 h-4 w-4" /> Create Agent</>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
-const agents: AIAgent[] = [
-  { id: 'content-writer', name: 'Content Writer', description: 'Generate blog posts, emails, landing pages, and ad copy', icon: PenLine, color: 'bg-blue-500', isAvailable: true },
-  { id: 'campaign-optimizer', name: 'Campaign Optimizer', description: 'Analyze and optimize campaign performance', icon: Target, color: 'bg-green-500', isAvailable: true },
-  { id: 'seo-analyst', name: 'SEO Analyst', description: 'Keyword research, content gap analysis, ranking tracking', icon: Search, color: 'bg-purple-500', isAvailable: true },
-  { id: 'audience-insights', name: 'Audience Insights', description: 'Segment analysis, behavior prediction, lookalike audiences', icon: BarChart3, color: 'bg-orange-500', isAvailable: true },
-  { id: 'email-assistant', name: 'Email Assistant', description: 'Write and A/B test email campaigns', icon: MessageSquare, color: 'bg-pink-500', isAvailable: false },
-  { id: 'content-enhancer', name: 'Content Enhancer', description: 'Rewrite, expand, or summarize existing content', icon: Wand2, color: 'bg-teal-500', isAvailable: false },
-];
+// ─── AI Suite Page ────────────────────────────────────────────
 
 export default function AiSuitePage() {
-  const [promptOpen, setPromptOpen] = useState(false);
-  const [promptText, setPromptText] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
+  const router = useRouter();
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [capabilityFilter, setCapabilityFilter] = useState<string>('all');
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [stats, setStats] = useState({ totalRuns: 0, avgResponse: '0s', guardrails: 0 });
 
-  const handleGenerate = async () => {
-    if (!promptText.trim()) return;
-    setIsGenerating(true);
-    // Simulate AI generation
-    await new Promise((r) => setTimeout(r, 2000));
-    toast.success('AI content generated successfully');
-    setIsGenerating(false);
-    setPromptOpen(false);
-    setPromptText('');
-  };
+  const fetchAgents = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params: { status?: AgentStatus; capability?: AgentCapability } = {};
+      if (statusFilter !== 'all') params.status = statusFilter as AgentStatus;
+      if (capabilityFilter !== 'all') params.capability = capabilityFilter as AgentCapability;
+      const res = await aiApi.listAgents(params.status || params.capability ? params : undefined);
+      setAgents(res.data || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load agents');
+      setAgents([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter, capabilityFilter]);
+
+  useEffect(() => {
+    fetchAgents();
+  }, [fetchAgents]);
+
+  const filteredAgents = agents;
 
   return (
     <div className="space-y-6">
@@ -93,65 +333,30 @@ export default function AiSuitePage() {
             </p>
           </div>
         </div>
-        <Dialog open={promptOpen} onOpenChange={setPromptOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Sparkles className="mr-2 h-4 w-4" />
-              AI Assistant
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>AI Assistant</DialogTitle>
-              <DialogDescription>
-                Describe what you want to create or optimize — AI agents will handle the rest
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-4">
-              <Label htmlFor="prompt">Your request</Label>
-              <Textarea
-                id="prompt"
-                placeholder="e.g., Write a welcome email series for new SaaS signups..."
-                className="mt-2 min-h-[150px]"
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-              />
-              <div className="mt-3 flex flex-wrap gap-2">
-                {['Write a blog post about SEO trends', 'Create a landing page for product launch', 'Analyze Q2 campaign performance', 'Generate social media captions'].map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    className="text-xs bg-muted px-3 py-1.5 rounded-full hover:bg-primary/10 hover:text-primary transition-colors"
-                    onClick={() => setPromptText(suggestion)}
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setPromptOpen(false)}>Cancel</Button>
-              <Button onClick={handleGenerate} disabled={isGenerating || !promptText.trim()}>
-                {isGenerating ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...</>
-                ) : (
-                  <><Sparkles className="mr-2 h-4 w-4" /> Generate</>
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => router.push('/ai-suite/content')}>
+            <FileText className="mr-2 h-4 w-4" />
+            Generate Content
+          </Button>
+          <Button onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Agent
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Available Agents</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Agents</CardTitle>
             <Brain className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{agents.filter((a) => a.isAvailable).length}/{agents.length}</div>
-            <p className="text-xs text-muted-foreground">{agents.filter((a) => !a.isAvailable).length} coming soon</p>
+            <div className="text-2xl font-bold">{agents.length}</div>
+            <p className="text-xs text-muted-foreground">
+              {agents.filter((a) => a.status === 'running').length} currently running
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -186,78 +391,179 @@ export default function AiSuitePage() {
         </Card>
       </div>
 
-      {/* Agent Grid */}
-      <div>
-        <h2 className="text-xl font-semibold mb-4">AI Agents</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {agents.map((agent) => {
-            const Icon = agent.icon;
-            return (
-              <Card key={agent.id} className={`relative ${!agent.isAvailable ? 'opacity-60' : 'hover:shadow-md transition-shadow'}`}>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className={`p-2 rounded-lg ${agent.color} text-white`}>
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    {!agent.isAvailable && (
-                      <Badge variant="secondary" className="text-xs">Coming Soon</Badge>
-                    )}
-                  </div>
-                  <CardTitle className="mt-3 text-lg">{agent.name}</CardTitle>
-                  <CardDescription>{agent.description}</CardDescription>
-                </CardHeader>
-                <CardFooter className="border-t pt-4">
-                  <Button
-                    variant={agent.isAvailable ? 'default' : 'outline'}
-                    className="w-full"
-                    disabled={!agent.isAvailable}
-                    onClick={() => {
-                      if (agent.isAvailable) {
-                        setPromptOpen(true);
-                        toast.info(`Opening ${agent.name}...`);
-                      }
-                    }}
-                  >
-                    {agent.isAvailable ? (
-                      <><Sparkles className="mr-2 h-4 w-4" /> Use Agent</>
-                    ) : (
-                      'Coming Soon'
-                    )}
-                  </Button>
-                </CardFooter>
-              </Card>
-            );
-          })}
-        </div>
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <Select
+          value={statusFilter}
+          onValueChange={(v) => { setStatusFilter(v); }}
+        >
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="All Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="idle">Idle</SelectItem>
+            <SelectItem value="running">Running</SelectItem>
+            <SelectItem value="error">Error</SelectItem>
+            <SelectItem value="paused">Paused</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={capabilityFilter}
+          onValueChange={(v) => { setCapabilityFilter(v); }}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="All Capabilities" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Capabilities</SelectItem>
+            {allCapabilities.map((cap) => (
+              <SelectItem key={cap} value={cap}>
+                {capabilityLabels[cap]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Recent Activity */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
-          <CardDescription>Your latest AI-generated content and analyses</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {[
-              { action: 'Generated blog post', title: '10 SEO Trends for 2026', time: '2 hours ago', agent: 'Content Writer' },
-              { action: 'Optimized campaign', title: 'Q2 Newsletter — Subject Line A/B Test', time: '5 hours ago', agent: 'Campaign Optimizer' },
-              { action: 'Keyword research', title: 'Marketing Automation — Top 50 Keywords', time: '1 day ago', agent: 'SEO Analyst' },
-            ].map((item, i) => (
-              <div key={i} className="flex items-center justify-between py-2 border-b last:border-0">
-                <div>
-                  <p className="text-sm font-medium">{item.action}</p>
-                  <p className="text-sm text-muted-foreground">{item.title}</p>
-                </div>
-                <div className="text-right text-xs text-muted-foreground">
-                  <p>{item.time}</p>
-                  <p className="text-primary">{item.agent}</p>
-                </div>
-              </div>
+      {/* Agent Grid */}
+      <div>
+        {loading ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <Skeleton className="h-10 w-10 rounded-lg" />
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                  </div>
+                  <Skeleton className="h-6 w-32 mt-3" />
+                  <Skeleton className="h-4 w-full mt-2" />
+                </CardHeader>
+                <CardContent>
+                  <div className="flex gap-1 flex-wrap">
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                    <Skeleton className="h-5 w-24 rounded-full" />
+                  </div>
+                </CardContent>
+                <CardFooter className="border-t pt-4">
+                  <Skeleton className="h-10 w-full" />
+                </CardFooter>
+              </Card>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <Bot className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-muted-foreground mb-2">Failed to load agents</p>
+            <p className="text-sm text-destructive mb-4">{error}</p>
+            <Button variant="outline" onClick={fetchAgents}>
+              Retry
+            </Button>
+          </div>
+        ) : filteredAgents.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <div className="p-4 rounded-full bg-muted mb-4">
+              <Brain className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold mb-1">No agents found</h3>
+            <p className="text-muted-foreground text-sm mb-4">
+              {statusFilter !== 'all' || capabilityFilter !== 'all'
+                ? 'No agents match the selected filters'
+                : 'Create your first AI agent to get started'}
+            </p>
+            {statusFilter === 'all' && capabilityFilter === 'all' && (
+              <Button onClick={() => setCreateDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Agent
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {filteredAgents.map((agent) => {
+              const status = statusConfig[agent.status] || statusConfig.idle;
+              const primaryCap = agent.capabilities[0] || 'chat';
+              const Icon = agentTypeIcons[primaryCap] || Bot;
+
+              return (
+                <Card
+                  key={agent.id}
+                  className="hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => router.push(`/ai-suite/${agent.id}`)}
+                >
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="p-2 rounded-lg bg-primary/10">
+                        <Icon className="h-5 w-5 text-primary" />
+                      </div>
+                      <Badge variant="outline" className={status.className}>
+                        {status.label}
+                      </Badge>
+                    </div>
+                    <CardTitle className="mt-3 text-lg">{agent.name}</CardTitle>
+                    <CardDescription>
+                      {agent.description || `AI agent with ${agent.capabilities.length} capabilities`}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {agent.capabilities.slice(0, 3).map((cap) => (
+                        <span
+                          key={cap}
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${capabilityColors[cap] || ''}`}
+                        >
+                          {capabilityLabels[cap] || cap}
+                        </span>
+                      ))}
+                      {agent.capabilities.length > 3 && (
+                        <span className="text-xs text-muted-foreground">
+                          +{agent.capabilities.length - 3}
+                        </span>
+                      )}
+                    </div>
+                    {agent.last_run_at && (
+                      <p className="text-xs text-muted-foreground">
+                        Last run: {formatDateTime(agent.last_run_at)}
+                      </p>
+                    )}
+                  </CardContent>
+                  <CardFooter className="border-t pt-4 flex gap-2">
+                    <Button
+                      variant="default"
+                      className="flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/ai-suite/${agent.id}`);
+                      }}
+                    >
+                      <Play className="mr-2 h-4 w-4" />
+                      Open
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/ai-suite/content`);
+                      }}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                    </Button>
+                  </CardFooter>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Create Agent Dialog */}
+      <CreateAgentDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        onCreated={fetchAgents}
+      />
     </div>
   );
 }

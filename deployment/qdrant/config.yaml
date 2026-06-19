@@ -1,0 +1,11 @@
+# Qdrant configuration for Aegis Marketing Cloud
+log_level: INFO
+
+storage:
+  optimizers:
+    default_segment_number: 2
+    memmap_threshold_kb: 20000
+
+service:
+  grpc_port: 6334
+  max_request_size_mb: 64

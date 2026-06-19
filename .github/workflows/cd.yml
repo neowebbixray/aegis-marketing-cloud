@@ -1,0 +1,258 @@
+# =============================================================================
+# Aegis Marketing Cloud — CD Pipeline
+# =============================================================================
+# Triggered by pushes to `main`.
+# Stages:
+#   1. Build & push Docker images to GHCR
+#   2. Deploy to staging environment
+#   3. Run integration tests against staging
+#   4. Gate — manual approval required for production
+#   5. Deploy to production
+# =============================================================================
+
+name: CD
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+  IMAGE_TAG: ${{ github.sha }}
+  STAGING_URL: ${{ vars.STAGING_URL || 'https://staging.aegismc.io' }}
+  PRODUCTION_URL: ${{ vars.PRODUCTION_URL || 'https://app.aegismc.io' }}
+
+jobs:
+  # ── Build & Push ───────────────────────────────────────────────────────
+  build-and-push:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata (tags, labels) for backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/backend
+          tags: |
+            type=sha,prefix=,suffix=
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}}
+
+      - name: Build & push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: backend
+          file: backend/Dockerfile
+          target: production
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract metadata (tags, labels) for frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/frontend
+          tags: |
+            type=sha,prefix=,suffix=
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}}
+
+      - name: Build & push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          target: production
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Image digest
+        run: |
+          echo "Backend  → ${{ env.REGISTRY }}/backend@${{ steps.meta-backend.outputs.digest }}"
+          echo "Frontend → ${{ env.REGISTRY }}/frontend@${{ steps.meta-frontend.outputs.digest }}"
+
+  # ── Deploy to Staging ──────────────────────────────────────────────────
+  deploy-staging:
+    name: Deploy to Staging
+    needs: [build-and-push]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: staging
+      url: ${{ env.STAGING_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.STAGING_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy via Docker Compose
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new \
+            "${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}" \
+            "cd /opt/aegis-marketing-cloud && \
+             docker compose pull && \
+             docker compose up -d --remove-orphans && \
+             docker system prune -af --volumes"
+
+      - name: Verify health endpoint
+        run: |
+          for i in $(seq 1 12); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ env.STAGING_URL }}/health" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Staging health check passed"
+              exit 0
+            fi
+            echo "Waiting... attempt $i"
+            sleep 10
+          done
+          echo "❌ Staging health check failed"
+          exit 1
+
+  # ── Integration Tests ──────────────────────────────────────────────────
+  integration-tests:
+    name: Integration Tests
+    needs: [deploy-staging]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install test tooling
+        run: pip install pytest httpx
+
+      - name: Run integration tests
+        run: |
+          pytest backend/app/tests/integration/ \
+            -v \
+            --junitxml=integration-results.xml \
+            -x
+        env:
+          INTEGRATION_BASE_URL: ${{ env.STAGING_URL }}
+          INTEGRATION_API_KEY: ${{ secrets.STAGING_API_KEY }}
+
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: integration-results.xml
+
+  # ── Deploy to Production (manual gate) ─────────────────────────────────
+  deploy-production:
+    name: Deploy to Production
+    needs: [integration-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ env.PRODUCTION_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PRODUCTION_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy to production
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new \
+            "${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }}" \
+            "cd /opt/aegis-marketing-cloud && \
+             docker compose pull && \
+             docker compose up -d --remove-orphans && \
+             docker system prune -af --volumes"
+
+      - name: Verify production health
+        run: |
+          for i in $(seq 1 12); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ env.PRODUCTION_URL }}/health" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Production health check passed"
+              exit 0
+            fi
+            echo "Waiting... attempt $i"
+            sleep 10
+          done
+          echo "❌ Production health check failed"
+          exit 1
+
+      - name: Notify deployment success
+        if: success()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "🚀 Aegis Marketing Cloud deployed to production (${{ github.sha }})",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*🚀 Production Deployed*\n• Commit: `${{ github.sha }}`\n• Backend: `${{ env.REGISTRY }}/backend:${{ env.IMAGE_TAG }}`\n• Frontend: `${{ env.REGISTRY }}/frontend:${{ env.IMAGE_TAG }}`\n• Environment: <${{ env.PRODUCTION_URL }}|${{ env.PRODUCTION_URL }}>"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+      - name: Notify deployment failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "❌ Production deployment failed (${{ github.sha }})",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*❌ Production Deployment Failed*\n• Commit: `${{ github.sha }}`\n• Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

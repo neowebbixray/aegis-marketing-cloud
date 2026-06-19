@@ -1,0 +1,352 @@
+# ─────────────────────────────────────────────────────────
+# Aegis Marketing Cloud — Development Infrastructure
+# ─────────────────────────────────────────────────────────
+# Architecture:
+#   API Gateway → FastAPI + GraphQL
+#   Database    → PostgreSQL 16
+#   Cache       → Redis 7 (sessions, short-term memory)
+#   Vector DB   → Qdrant (knowledge base, long-term memory)
+#   Storage     → MinIO (assets, media, backups)
+#   Queue       → RabbitMQ (async tasks, workflow triggers)
+#   Automation  → n8n (workflow engine)
+#   Monitoring  → Prometheus + Grafana + Loki
+#   Mail        → Mailpit (dev email catcher)
+# ─────────────────────────────────────────────────────────
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-healthcheck: &healthcheck-base
+  interval: 15s
+  timeout: 5s
+  retries: 5
+  start_period: 30s
+
+networks:
+  amc-network:
+    name: amc-network
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  qdrant-data:
+  qdrant-snapshots:
+  minio-data:
+  rabbitmq-data:
+  n8n-data:
+  grafana-data:
+  loki-data:
+  prometheus-data:
+  mailpit-data:
+
+services:
+  # ─── Database ────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: amc-postgres
+    networks: [amc-network]
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_DB: aegis
+      POSTGRES_USER: aegis
+      POSTGRES_PASSWORD: aegis_secret
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/compose/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      <<: *healthcheck-base
+      test: ["CMD-SHELL", "pg_isready -U aegis -d aegis"]
+    logging: *default-logging
+
+  # ─── Cache & Session Store ───────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: amc-redis
+    networks: [amc-network]
+    ports: ["6379:6379"]
+    command: redis-server --requirepass aegis_redis --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging: *default-logging
+
+  # ─── Vector Database ─────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.12.0
+    container_name: amc-qdrant
+    networks: [amc-network]
+    ports: ["6333:6333", "6334:6334"]
+    volumes:
+      - qdrant-data:/qdrant/storage
+      - qdrant-snapshots:/qdrant/snapshots
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *default-logging
+
+  # ─── Object Storage ──────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: amc-minio
+    networks: [amc-network]
+    ports: ["9000:9000", "9001:9001"]
+    environment:
+      MINIO_ROOT_USER: aegis_minio
+      MINIO_ROOT_PASSWORD: aegis_minio_secret
+      MINIO_DOMAIN: localhost
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    logging: *default-logging
+
+  createbuckets:
+    image: minio/mc:latest
+    container_name: amc-minio-setup
+    networks: [amc-network]
+    depends_on: [minio]
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5 &&
+      mc alias set amc http://minio:9000 aegis_minio aegis_minio_secret &&
+      mc mb amc/assets --ignore-existing &&
+      mc mb amc/media --ignore-existing &&
+      mc mb amc/backups --ignore-existing &&
+      mc mb amc/temp --ignore-existing &&
+      mc anonymous set download amc/assets &&
+      exit 0
+      "
+    logging: *default-logging
+
+  # ─── Message Broker ──────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:4.0-management-alpine
+    container_name: amc-rabbitmq
+    networks: [amc-network]
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: aegis
+      RABBITMQ_DEFAULT_PASS: aegis_rabbit
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  # ─── Workflow Automation ─────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: amc-n8n
+    networks: [amc-network]
+    ports: ["5678:5678"]
+    environment:
+      N8N_PORT: 5678
+      N8N_HOST: localhost
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: http://localhost:5678
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: "168"
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_DATABASE: aegis_n8n
+      DB_POSTGRESDB_USER: aegis
+      DB_POSTGRESDB_PASSWORD: aegis_secret
+      N8N_ENCRYPTION_KEY: change-me-n8n-encryption-key-32chars
+      N8N_METRICS: "true"
+    volumes:
+      - n8n-data:/home/node/.n8n
+      - ./integrations/n8n/workflows:/workflows
+    depends_on: [postgres]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging: *default-logging
+
+  # ─── API / Backend ────────────────────────────────────
+  backend:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile
+    container_name: amc-backend
+    networks: [amc-network]
+    ports: ["8000:8000"]
+    env_file: ./src/backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aegis:aegis_secret@postgres:5432/aegis
+      REDIS_URL: redis://:aegis_redis@redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      MINIO_ENDPOINT: minio:9000
+      RABBITMQ_URL: amqp://aegis:aegis_rabbit@rabbitmq:5672/
+    volumes:
+      - ./src/backend:/app
+      - ./media-library:/media-library
+    command: >
+      sh -c "
+      alembic upgrade head &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
+      "
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      qdrant: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging: *default-logging
+
+  # ─── Task Queue Worker ────────────────────────────────
+  worker:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile
+    container_name: amc-worker
+    networks: [amc-network]
+    env_file: ./src/backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aegis:aegis_secret@postgres:5432/aegis
+      REDIS_URL: redis://:aegis_redis@redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      MINIO_ENDPOINT: minio:9000
+      RABBITMQ_URL: amqp://aegis:aegis_rabbit@rabbitmq:5672/
+    volumes:
+      - ./src/backend:/app
+      - ./media-library:/media-library
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
+    depends_on:
+      backend: { condition: service_healthy }
+    logging: *default-logging
+
+  # ─── Flower (Celery Monitor) ─────────────────────────
+  flower:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile
+    container_name: amc-flower
+    networks: [amc-network]
+    ports: ["5555:5555"]
+    env_file: ./src/backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aegis:aegis_secret@postgres:5432/aegis
+      REDIS_URL: redis://:aegis_redis@redis:6379/0
+    command: celery -A app.tasks.celery_app flower --port=5555
+    depends_on: [worker]
+    logging: *default-logging
+
+  # ─── Monitoring — Metrics ─────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: amc-prometheus
+    networks: [amc-network]
+    ports: ["9090:9090"]
+    volumes:
+      - ./infra/compose/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+    depends_on: [backend, n8n]
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: amc-grafana
+    networks: [amc-network]
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infra/compose/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infra/compose/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on: [prometheus, loki]
+    logging: *default-logging
+
+  # ─── Monitoring — Logs ────────────────────────────────
+  loki:
+    image: grafana/loki:3.1.0
+    container_name: amc-loki
+    networks: [amc-network]
+    ports: ["3100:3100"]
+    volumes:
+      - ./infra/compose/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    command: -config.file=/etc/loki/loki-config.yml
+    logging: *default-logging
+
+  promtail:
+    image: grafana/promtail:3.1.0
+    container_name: amc-promtail
+    networks: [amc-network]
+    volumes:
+      - /var/log:/var/log:ro
+      - ./infra/compose/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on: [loki]
+    logging: *default-logging
+
+  # ─── Development Email ────────────────────────────────
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: amc-mailpit
+    networks: [amc-network]
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    volumes:
+      - mailpit-data:/data
+    logging: *default-logging
+
+  # ─── Frontend (Next.js) ────────────────────────────────
+  frontend:
+    build:
+      context: ./src/frontend
+      dockerfile: Dockerfile
+    container_name: amc-frontend
+    networks: [amc-network]
+    ports: ["3000:3000"]
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+      - NODE_ENV=development
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+      - NEXT_TELEMETRY_DISABLED=1
+    volumes:
+      - ./src/frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging: *default-logging

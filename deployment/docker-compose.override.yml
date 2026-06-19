@@ -1,0 +1,40 @@
+# =============================================================================
+# Aegis Marketing Cloud — Docker Compose Override (Local Development)
+#
+# Add this to customize your local environment without modifying the base file.
+# Usage: docker compose -f deployment/docker-compose.yml -f deployment/docker-compose.override.yml up
+# =============================================================================
+
+services:
+  # Expose specific ports for local tooling
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  minio:
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  rabbitmq:
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  qdrant:
+    ports:
+      - "6333:6333"
+
+  backend:
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=true
+
+  frontend:
+    ports:
+      - "3000:3000"

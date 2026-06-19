@@ -37,6 +37,21 @@ from tests.factories.crm import (
 from tests.factories.marketing import CampaignFactory, EmailTemplateFactory, SegmentFactory
 from tests.factories.tenant import RoleFactory, TenantFactory, UserRoleFactory, WorkspaceFactory
 from tests.factories.ai import AIAgentFactory, ConversationFactory, KnowledgeDocumentFactory
+from tests.factories.analytics import (
+    AnalyticsDashboardFactory,
+    AnalyticsEventFactory,
+    MetricSnapshotFactory,
+    ScheduledReportFactory,
+)
+from tests.factories.billing import (
+    CreditWalletFactory,
+    InvoiceFactory,
+    SubscriptionFactory,
+    UsageRecordFactory,
+)
+from tests.factories.email import EmailCampaignFactory, EmailMessageFactory
+from tests.factories.media import MediaAssetFactory
+from tests.factories.webhooks import WebhookDeliveryFactory, WebhookFactory
 
 # ── Test database ────────────────────────────────────────────────────────────
 # Use a separate database for tests (configure via env variable or fallback).
@@ -248,6 +263,12 @@ async def _setup_factory_sessions(db_session: AsyncSession) -> None:
         ActivityFactory,
         CampaignFactory, EmailTemplateFactory, SegmentFactory,
         AIAgentFactory, KnowledgeDocumentFactory, ConversationFactory,
+        SubscriptionFactory, InvoiceFactory, CreditWalletFactory, UsageRecordFactory,
+        MediaAssetFactory,
+        WebhookFactory, WebhookDeliveryFactory,
+        AnalyticsEventFactory, MetricSnapshotFactory, AnalyticsDashboardFactory,
+        ScheduledReportFactory,
+        EmailCampaignFactory, EmailMessageFactory,
     ):
         factory_cls._meta.sqlalchemy_session = db_session
 

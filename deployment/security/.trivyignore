@@ -1,0 +1,14 @@
+# Trivy ignore file for Aegis Marketing Cloud
+# https://aquasecurity.github.io/trivy/
+
+# Ignore specific vulnerabilities by ID
+# Format: CVE-ID or GHSA-ID
+#
+# Examples:
+# CVE-2023-12345    # Add comment explaining why it's ignored
+#
+# We track all acknowledged vulnerabilities in docs/security/vulnerability-log.md
+
+# Transitive dependency issues with no known exploit path
+CVE-2024-1723      # Transitive dependency, no vector in our architecture
+CVE-2023-50447     # Low severity, no direct usage path

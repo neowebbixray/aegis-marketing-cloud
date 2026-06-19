@@ -70,3 +70,20 @@ class CreditWallet(BaseModel):
 
     def __repr__(self) -> str:
         return f"<CreditWallet {self.tenant_id}: ${self.balance}>"
+
+
+class UsageRecord(BaseModel):
+    """Metered usage record for a subscription (e.g. API calls, storage)."""
+
+    __tablename__ = "usage_records"
+
+    subscription_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    metric: Mapped[str] = mapped_column(String(100), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True, default=dict)
+
+    def __repr__(self) -> str:
+        return f"<UsageRecord {self.metric}: {self.quantity}>"

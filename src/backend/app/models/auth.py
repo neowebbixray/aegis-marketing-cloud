@@ -72,6 +72,12 @@ class OAuthAccount(BaseModel):
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
     provider_account_id: Mapped[str] = mapped_column(String(256), nullable=False)
     provider_email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
+    display_name: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    avatar_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    access_token: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    refresh_token: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    token_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    raw_attributes: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, default=dict, nullable=True)
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="oauth_accounts")

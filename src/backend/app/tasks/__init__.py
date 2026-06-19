@@ -14,6 +14,7 @@ celery_app = Celery(
         "app.tasks.ai",
         "app.tasks.workflows",
         "app.tasks.reports",
+        "app.tasks.knowledge_indexing",
     ],
 )
 

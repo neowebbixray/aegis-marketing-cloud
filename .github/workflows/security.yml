@@ -6,6 +6,8 @@
 #   1. Dependency vulnerability scanning (pip audit, npm audit)
 #   2. SAST via CodeQL (JavaScript/TypeScript + Python)
 #   3. Secret scanning (truffleHog / Gitleaks-style)
+#   4. Bandit Python SAST (via ci-security-scan.sh)
+#   5. Trivy filesystem scanning (via ci-security-scan.sh)
 # =============================================================================
 
 name: Security Scan
@@ -14,6 +16,14 @@ on:
   schedule:
     - cron: "0 9 * * 1" # Every Monday at 09:00 UTC
   workflow_dispatch: # Allow manual trigger
+  push:
+    branches: [main, develop]
+    paths:
+      - "src/**"
+      - "deployment/**"
+      - "scripts/**"
+      - "pyproject.toml"
+      - "package.json"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -104,6 +114,73 @@ jobs:
           upload: true
           output: sarif-results
 
+  # ── SAST — Bandit (Python) ──────────────────────────────────────────
+  bandit-sast:
+    name: SAST — Bandit (Python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Bandit
+        run: pip install bandit
+
+      - name: Run Bandit
+        run: |
+          bandit -r src/backend/app/ \
+            -c deployment/security/bandit.conf \
+            -f custom \
+            -o bandit-report.txt || echo "::warning::Bandit found issues"
+          cat bandit-report.txt
+
+      - name: Upload Bandit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-sast-results
+          path: bandit-report.txt
+
+  # ── Trivy Filesystem Scan ───────────────────────────────────────────
+  trivy-scan:
+    name: Trivy Filesystem Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true
+          trivyignores: deployment/security/.trivyignore
+          format: "sarif"
+          output: "trivy-results.sarif"
+          exit-code: "0"
+
+      - name: Upload Trivy results to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-results.sarif"
+          category: "trivy"
+
+      - name: Upload Trivy results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-fs-results
+          path: trivy-results.sarif
+
   # ── Secret Scanning ───────────────────────────────────────────────────
   secret-scan:
     name: Secret Scanning
@@ -148,7 +225,7 @@ jobs:
   # ── Summary ───────────────────────────────────────────────────────────
   security-summary:
     name: Security Summary
-    needs: [dependency-scan, codeql-analysis, secret-scan]
+    needs: [dependency-scan, codeql-analysis, bandit-sast, trivy-scan, secret-scan]
     runs-on: ubuntu-latest
     if: always()
 
@@ -161,7 +238,7 @@ jobs:
           echo "| Scan | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
 
-          for job in "dependency-scan" "codeql-analysis (javascript-typescript)" "codeql-analysis (python)" "secret-scan"; do
+          for job in "dependency-scan" "codeql-analysis (javascript-typescript)" "codeql-analysis (python)" "bandit-sast" "trivy-scan" "secret-scan"; do
             echo "| $job | ✅ Completed |" >> $GITHUB_STEP_SUMMARY
           done
 

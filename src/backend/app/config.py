@@ -44,7 +44,16 @@ class Settings(BaseSettings):
     database_max_overflow: int = Field(default=10, alias="DATABASE_MAX_OVERFLOW")
 
     # ── Redis ────────────────────────────────────────────────────────────────
-    redis_url: str = Field(default="redis://localhost:***@localhost:5672/", alias="RABBITMQ_URL")
+    redis_url: str = Field(
+        default="redis://:aegis_redis@localhost:6379/0",
+        alias="REDIS_URL",
+    )
+
+    # ── RabbitMQ ────────────────────────────────────────────────────────────
+    rabbitmq_url: str = Field(
+        default="amqp://aegis:***@localhost:5672/",
+        alias="RABBITMQ_URL",
+    )
 
     # ── Auth / JWT ───────────────────────────────────────────────────────────
     secret_key: str = Field(default="changeme", alias="SECRET_KEY")
@@ -75,10 +84,67 @@ class Settings(BaseSettings):
     # ── Encryption (pgcrypto) ────────────────────────────────────────────────
     encryption_key: Optional[str] = Field(default=None, alias="ENCRYPTION_KEY")
 
+    # ── Media / MinIO ───────────────────────────────────────────────────────────
+    media_library_root: str = Field(
+        default="media-library",
+        alias="MEDIA_LIBRARY_ROOT",
+    )
+
+    # ── Prometheus Metrics ─────────────────────────────────────────────────────
+    prometheus_enabled: bool = Field(default=True, alias="PROMETHEUS_ENABLED")
+
     # ── Rate Limiting ─────────────────────────────────────────────────────────
     rate_limit_enabled: bool = Field(default=False, alias="RATE_LIMIT_ENABLED")
     rate_limit_requests: int = Field(default=100, alias="RATE_LIMIT_REQUESTS")
     rate_limit_window: int = Field(default=60, alias="RATE_LIMIT_WINDOW")  # seconds
+
+    # ── SSO / OAuth ────────────────────────────────────────────────────────────
+    sso_redirect_uri: str = Field(
+        default="http://localhost:8000/api/v1/auth/sso/callback",
+        alias="SSO_REDIRECT_URI",
+    )
+
+    google_oauth_client_id: str | None = Field(default=None, alias="GOOGLE_OAUTH_CLIENT_ID")
+    google_oauth_client_secret: str | None = Field(default=None, alias="GOOGLE_OAUTH_CLIENT_SECRET")
+    microsoft_oauth_client_id: str | None = Field(default=None, alias="MICROSOFT_OAUTH_CLIENT_ID")
+    microsoft_oauth_client_secret: str | None = Field(default=None, alias="MICROSOFT_OAUTH_CLIENT_SECRET")
+    microsoft_oauth_tenant: str | None = Field(default=None, alias="MICROSOFT_OAUTH_TENANT")
+    github_oauth_client_id: str | None = Field(default=None, alias="GITHUB_OAUTH_CLIENT_ID")
+    github_oauth_client_secret: str | None = Field(default=None, alias="GITHUB_OAUTH_CLIENT_SECRET")
+
+    # ── SAML ───────────────────────────────────────────────────────────────────
+    saml_idp_metadata_url: str | None = Field(default=None, alias="SAML_IDP_METADATA_URL")
+    saml_idp_entity_id: str | None = Field(default=None, alias="SAML_IDP_ENTITY_ID")
+    saml_sp_entity_id: str | None = Field(default=None, alias="SAML_SP_ENTITY_ID")
+    saml_sp_acs_url: str | None = Field(default=None, alias="SAML_SP_ACS_URL")
+    saml_sp_x509_cert: str | None = Field(default=None, alias="SAML_SP_X509_CERT")
+    saml_sp_private_key: str | None = Field(default=None, alias="SAML_SP_PRIVATE_KEY")
+
+    # ── Qdrant Vector Store ────────────────────────────────────────────────────
+    qdrant_host: str = Field(default="localhost", alias="QDRANT_HOST")
+    qdrant_port: int = Field(default=6333, alias="QDRANT_PORT")
+    qdrant_api_key: str | None = Field(default=None, alias="QDRANT_API_KEY")
+    qdrant_prefer_grpc: bool = Field(default=False, alias="QDRANT_PREFER_GRPC")
+    qdrant_https: bool = Field(default=False, alias="QDRANT_HTTPS")
+
+    # ── Embeddings ─────────────────────────────────────────────────────────────
+    embedding_model: str = Field(
+        default="sentence-transformers/all-MiniLM-L6-v2",
+        alias="EMBEDDING_MODEL",
+    )
+    embedding_endpoint: str | None = Field(default=None, alias="EMBEDDING_ENDPOINT")
+    embedding_dimension: int = Field(default=384, alias="EMBEDDING_DIMENSION")
+    embedding_api_key: str | None = Field(default=None, alias="EMBEDDING_API_KEY")
+
+    # ── Knowledge / Chunking ───────────────────────────────────────────────────
+    chunk_size: int = Field(default=512, alias="CHUNK_SIZE")
+    chunk_overlap: int = Field(default=50, alias="CHUNK_OVERLAP")
+
+    # ── Celery (optional) ──────────────────────────────────────────────────────
+    celery_broker_url: str = Field(
+        default="redis://:aegis_redis@localhost:6379/0",
+        alias="CELERY_BROKER_URL",
+    )
 
     # ── Trusted Hosts ────────────────────────────────────────────────────────
     trusted_hosts: List[str] = Field(

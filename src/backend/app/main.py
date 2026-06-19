@@ -20,7 +20,9 @@ from fastapi.responses import JSONResponse
 from app.api.v1 import router as v1_router
 from app.api.graphql.schema import graphql_router
 from app.config import settings
+from app.core.api_version import APIVersionMiddleware
 from app.core.exceptions import register_exception_handlers
+from app.core.metrics_middleware import PrometheusMetricsMiddleware
 from app.core.middleware import (
     LoggingMiddleware,
     RateLimitMiddleware,
@@ -93,6 +95,9 @@ def create_app() -> FastAPI:
     # 1. Request ID (outermost)
     app.add_middleware(RequestIDMiddleware)
 
+    # 1b. API Versioning (very early in the chain)
+    app.add_middleware(APIVersionMiddleware)
+
     # 2. CORS
     app.add_middleware(
         CORSMiddleware,
@@ -103,19 +108,23 @@ def create_app() -> FastAPI:
         expose_headers=["X-Request-ID"],
     )
 
-    # 3. Trusted Host
+    # 3. Prometheus metrics (after CORS, before tenant — so /metrics is
+    #    accessible without tenant context)
+    app.add_middleware(PrometheusMetricsMiddleware)
+
+    # 4. Trusted Host
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=settings.trusted_hosts,
     )
 
-    # 4. Tenant context
+    # 5. Tenant context
     app.add_middleware(TenantContextMiddleware)
 
-    # 5. Rate limiting (stub)
+    # 6. Rate limiting (stub)
     app.add_middleware(RateLimitMiddleware)
 
-    # 6. Logging (innermost - runs closest to the router)
+    # 7. Logging (innermost - runs closest to the router)
     app.add_middleware(LoggingMiddleware)
 
     # ── Routes ───────────────────────────────────────────────────────────

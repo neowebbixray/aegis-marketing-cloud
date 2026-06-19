@@ -1,10 +1,13 @@
 """
-Auth router: registration, login, token refresh, profile, API keys.
+Auth router: registration, login, token refresh, profile, API keys, SSO.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+import uuid
+from typing import Any
+
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_user, get_db
@@ -22,6 +25,14 @@ from app.schemas.auth import (
     TokenResponse,
     UpdateMeRequest,
     UserResponse,
+)
+from app.schemas.sso import (
+    SAMLLoginResponse,
+    SSOCallbackRequest,
+    SSOInitiateResponse,
+    SSOProviderListResponse,
+    SSOProviderResponse,
+    SSOTokenResponse,
 )
 from app.services.auth import AuthService
 
@@ -195,3 +206,151 @@ async def jwks_endpoint() -> dict:
     token verification.
     """
     return get_jwks()
+
+
+# ── SSO / SAML Endpoints ─────────────────────────────────────────────────────
+
+
+@router.get(
+    "/sso/providers",
+    response_model=SSOProviderListResponse,
+    summary="List configured SSO providers",
+)
+async def list_sso_providers() -> SSOProviderListResponse:
+    """Return all configured SSO/OAuth/SAML providers."""
+    from app.core.sso import get_configured_providers
+
+    providers = get_configured_providers()
+    return SSOProviderListResponse(
+        providers=[
+            SSOProviderResponse(name=name, label=label)
+            for name, label in providers.items()
+        ]
+    )
+
+
+@router.post(
+    "/sso/{provider}",
+    response_model=SSOInitiateResponse | SAMLLoginResponse,
+    summary="Initiate SSO login flow",
+)
+async def initiate_sso(
+    provider: str,
+) -> SSOInitiateResponse | SAMLLoginResponse:
+    """Initiate an SSO login flow for the given provider.
+
+    Returns a redirect URL to the provider's OAuth authorization page
+    (or SAML IdP).
+    """
+    from app.core.sso import get_sso_provider
+
+    sso = get_sso_provider(provider)
+    if sso is None:
+        raise NotFoundException(detail=f"Unknown SSO provider: {provider}")
+
+    state = uuid.uuid4().hex  # In production, store this in Redis/session
+
+    if provider == "saml":
+        redirect_url, request_id = sso.get_login_url()
+        return SAMLLoginResponse(
+            authorization_url=redirect_url,
+            request_id=request_id,
+        )
+
+    authorization_url = sso.get_authorization_url(state)
+    return SSOInitiateResponse(
+        authorization_url=authorization_url,
+        state=state,
+    )
+
+
+@router.get(
+    "/sso/{provider}/callback",
+    response_model=SSOTokenResponse,
+    summary="Handle OAuth callback",
+)
+async def sso_callback(
+    provider: str,
+    code: str = Query(..., description="Authorization code from provider"),
+    state: str = Query(..., description="State parameter for CSRF validation"),
+    db: AsyncSession = Depends(get_db),
+) -> SSOTokenResponse:
+    """Handle the OAuth callback from the SSO provider.
+
+    Exchanges the authorization code for user info, then creates or links
+    a user account and returns JWT tokens.
+    """
+    from app.core.sso import get_sso_provider
+
+    sso = get_sso_provider(provider)
+    if sso is None:
+        raise NotFoundException(detail=f"Unknown SSO provider: {provider}")
+
+    # Exchange code for user info
+    user_info = await sso.exchange_code(code, state)
+
+    # Find or create user account
+    auth_service = AuthService(db)
+    result = await auth_service.sso_login_or_register(
+        provider=user_info.provider,
+        provider_account_id=user_info.provider_account_id,
+        email=user_info.email,
+        display_name=user_info.display_name or "",
+    )
+
+    return SSOTokenResponse(
+        access_token=result["access_token"],
+        refresh_token=result["refresh_token"],
+        token_type="bearer",
+        expires_in=result["expires_in"],
+        user_id=result["user_id"],
+        email=result["email"],
+        display_name=result.get("display_name"),
+        is_new_user=result.get("is_new_user", False),
+    )
+
+
+@router.post(
+    "/sso/saml/callback",
+    response_model=SSOTokenResponse,
+    summary="Handle SAML assertion POST",
+)
+async def saml_callback(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> SSOTokenResponse:
+    """Process a SAML IdP response (HTTP-POST binding).
+
+    Expects a ``SAMLResponse`` form field in the POST body.
+    """
+    from app.core.sso import SAMLProvider, get_sso_provider
+
+    sso = get_sso_provider("saml")
+    if sso is None or not isinstance(sso, SAMLProvider):
+        raise NotFoundException(detail="SAML provider not configured")
+
+    form = await request.form()
+    post_data = dict(form)
+
+    # Process the SAML assertion
+    user_info = await sso.process_assertion(post_data)
+
+    # Find or create user account
+    auth_service = AuthService(db)
+    result = await auth_service.sso_login_or_register(
+        provider=user_info.provider,
+        provider_account_id=user_info.provider_account_id,
+        email=user_info.email,
+        display_name=user_info.display_name or "",
+    )
+
+    return SSOTokenResponse(
+        access_token=result["access_token"],
+        refresh_token=result["refresh_token"],
+        token_type="bearer",
+        expires_in=result["expires_in"],
+        user_id=result["user_id"],
+        email=result["email"],
+        display_name=result.get("display_name"),
+        is_new_user=result.get("is_new_user", False),
+    )

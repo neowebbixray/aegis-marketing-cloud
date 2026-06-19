@@ -30,7 +30,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.models.auth import ApiKey, Session, User
+from app.models.auth import ApiKey, OAuthAccount, Session, User
 from app.models.tenant import Role, Tenant, UserRole, Workspace
 
 logger = logging.getLogger("amc.services.auth")
@@ -347,6 +347,148 @@ class AuthService:
         user.password_hash = hash_password(new_password)
         await self.db.flush()
         await self.db.commit()
+
+    # ── SSO Login / Register ────────────────────────────────────────────────
+    async def sso_login_or_register(
+        self,
+        provider: str,
+        provider_account_id: str,
+        email: str,
+        display_name: str,
+    ) -> dict[str, Any]:
+        """Find an existing user by SSO provider account, or create a new one.
+
+        Returns:
+            A dict with ``access_token``, ``refresh_token``, ``expires_in``,
+            ``user_id``, ``email``, ``display_name``, and ``is_new_user``.
+        """
+        # Look for existing OAuth account link
+        result = await self.db.execute(
+            select(OAuthAccount).where(
+                OAuthAccount.provider == provider,
+                OAuthAccount.provider_account_id == provider_account_id,
+            )
+        )
+        oauth_account = result.scalars().first()
+
+        if oauth_account is not None:
+            # Existing link — return tokens for the linked user
+            user_result = await self.db.execute(
+                select(User).where(User.id == oauth_account.user_id)
+            )
+            user = user_result.scalars().first()
+            if user is None:
+                raise NotFoundException(detail="Linked user account not found")
+            is_new_user = False
+        else:
+            # Check if a user with this email already exists
+            user_result = await self.db.execute(
+                select(User).where(User.email == email)
+            )
+            user = user_result.scalars().first()
+
+            if user:
+                # Link the OAuth account to the existing user
+                oauth_account = OAuthAccount(
+                    user_id=user.id,
+                    provider=provider,
+                    provider_account_id=provider_account_id,
+                    provider_email=email,
+                )
+                self.db.add(oauth_account)
+                is_new_user = False
+            else:
+                # Create a new user with a random password (no password login)
+                import secrets
+
+                random_pw = secrets.token_urlsafe(32)
+                pw_hash = hash_password(random_pw)
+
+                user = User(
+                    email=email,
+                    password_hash=pw_hash,
+                    display_name=display_name or email.split("@")[0],
+                    email_verified=True,
+                )
+                self.db.add(user)
+                await self.db.flush()
+
+                # Create a default tenant and workspace for the new user
+                tenant = Tenant(
+                    name=f"{display_name or email}'s Organisation",
+                    slug=f"org-{user.id.hex[:8]}",
+                )
+                self.db.add(tenant)
+                await self.db.flush()
+
+                workspace = Workspace(
+                    tenant_id=tenant.id,
+                    name="Default Workspace",
+                    slug="default",
+                    is_default=True,
+                )
+                self.db.add(workspace)
+                await self.db.flush()
+
+                # Create default role and assignment
+                admin_role = Role(
+                    tenant_id=tenant.id,
+                    name="Admin",
+                    description="Full system access within the tenant",
+                    is_system=True,
+                )
+                self.db.add(admin_role)
+                await self.db.flush()
+
+                user_role = UserRole(
+                    user_id=user.id,
+                    role_id=admin_role.id,
+                    workspace_id=workspace.id,
+                )
+                self.db.add(user_role)
+                await self.db.flush()
+
+                # Create OAuth account link
+                oauth_account = OAuthAccount(
+                    user_id=user.id,
+                    provider=provider,
+                    provider_account_id=provider_account_id,
+                    provider_email=email,
+                )
+                self.db.add(oauth_account)
+                is_new_user = True
+
+        # Update last login
+        user.last_login_at = datetime.now(timezone.utc)
+        await self.db.flush()
+
+        # Get tenant context
+        tenant_id, workspace_id = await self._get_user_context(user.id)
+
+        # Issue tokens
+        access_token = create_access_token(
+            subject=str(user.id),
+            extra_claims={
+                "tenant_id": str(tenant_id),
+                "workspace_id": str(workspace_id),
+                "sso_provider": provider,
+            },
+        )
+        refresh_token = create_refresh_token(subject=str(user.id))
+        await self._store_refresh_token(user.id, tenant_id, refresh_token)
+
+        await self.db.commit()
+
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "expires_in": settings.jwt_access_token_expire * 60,
+            "user_id": user.id,
+            "email": user.email,
+            "display_name": user.display_name,
+            "is_new_user": is_new_user,
+        }
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 

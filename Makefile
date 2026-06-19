@@ -185,7 +185,16 @@ test-coverage: ## Run tests with coverage report
 	@echo "📊 Coverage report: $(BACKEND_DIR)/coverage_html/index.html"
 
 # ── Code Quality ────────────────────────────────────────────────────────────
-.PHONY: lint lint-python lint-frontend format
+.PHONY: lint lint-python lint-frontend format openapi security-scan
+
+openapi: ## Generate OpenAPI 3.1 spec (docs/openapi.json + docs/openapi.yaml)
+	@cd $(BACKEND_DIR) && \
+		source .venv/bin/activate 2>/dev/null && \
+		python $(PROJECT_ROOT)/scripts/generate-openapi.py || \
+		python scripts/generate-openapi.py
+
+security-scan: ## Run combined security scanning pipeline
+	@bash scripts/ci-security-scan.sh --python-only
 
 lint-python: ## Lint Python with ruff
 	@cd $(BACKEND_DIR) && \

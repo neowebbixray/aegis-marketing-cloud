@@ -14,8 +14,10 @@ from app.models.tenant import (
 from app.models.crm import Contact, Deal, Pipeline, PipelineStage, Activity
 from app.models.marketing import Campaign, EmailTemplate, LandingPage, Funnel, Segment, Tag
 from app.models.ai import AIAgent, AIAgentExecution, KnowledgeDocument, Conversation, Message
-from app.models.billing import Subscription, Invoice, CreditWallet
+from app.models.billing import Subscription, Invoice, CreditWallet, UsageRecord
 from app.models.media import Asset
+from app.models.webhooks import Webhook, WebhookDelivery
+from app.models.analytics import AnalyticsEvent, Dashboard, MetricSnapshot, ScheduledReport
 
 __all__ = [
     # Base
@@ -61,6 +63,15 @@ __all__ = [
     "Subscription",
     "Invoice",
     "CreditWallet",
+    "UsageRecord",
     # Media
     "Asset",
+    # Webhooks
+    "Webhook",
+    "WebhookDelivery",
+    # Analytics
+    "AnalyticsEvent",
+    "MetricSnapshot",
+    "Dashboard",
+    "ScheduledReport",
 ]

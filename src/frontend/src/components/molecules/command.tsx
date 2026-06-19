@@ -39,12 +39,13 @@ function Command({ className, ...props }: CommandProps) {
   );
 }
 
-interface CommandInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+interface CommandInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
   wrapperClassName?: string;
+  onValueChange?: (value: string) => void;
 }
 
 const CommandInput = React.forwardRef<HTMLInputElement, CommandInputProps>(
-  ({ className, wrapperClassName, ...props }, ref) => (
+  ({ className, wrapperClassName, onValueChange, ...props }, ref) => (
     <div
       className={cn('flex items-center border-b px-3', wrapperClassName)}
       cmdk-input-wrapper=""
@@ -56,6 +57,10 @@ const CommandInput = React.forwardRef<HTMLInputElement, CommandInputProps>(
           'flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
           className
         )}
+        onChange={(e) => {
+          onValueChange?.(e.target.value);
+          props.onChange?.(e);
+        }}
         {...props}
       />
     </div>

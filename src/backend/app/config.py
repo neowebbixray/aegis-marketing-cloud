@@ -176,6 +176,25 @@ class Settings(BaseSettings):
     smtp_from: str = Field(default="noreply@aegismc.com", alias="SMTP_FROM")
     smtp_tls: bool = Field(default=False, alias="SMTP_TLS")
 
+    # ── AWS SES ──────────────────────────────────────────────────────────────────
+    aws_access_key_id: str | None = Field(default=None, alias="AWS_ACCESS_KEY_ID")
+    aws_secret_access_key: str | None = Field(default=None, alias="AWS_SECRET_ACCESS_KEY")
+    aws_region: str | None = Field(default=None, alias="AWS_REGION")
+
+    # ── Email Tracking ────────────────────────────────────────────────────────────
+    email_tracking_url: str | None = Field(
+        default=None, alias="EMAIL_TRACKING_URL",
+        description="Public base URL for email open/click tracking (e.g. https://api.amc.io)",
+    )
+    email_rate_limit: int = Field(
+        default=60, alias="EMAIL_RATE_LIMIT",
+        description="Max outbound emails per minute per workspace",
+    )
+    public_api_url: str = Field(
+        default="http://localhost:8000", alias="PUBLIC_API_URL",
+        description="Public-facing API base URL",
+    )
+
     # ── Sentry / Error Tracking ──────────────────────────────────────────────────
     sentry_dsn: str | None = Field(default=None, alias="SENTRY_DSN")
     sentry_environment: str | None = Field(default=None, alias="SENTRY_ENVIRONMENT")

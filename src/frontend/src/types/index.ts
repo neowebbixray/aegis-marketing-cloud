@@ -250,6 +250,21 @@ export interface CreatePipelineRequest {
   stages: { name: string; color: string; probability: number }[];
 }
 
+// ─── Notification Types ─────────────────────────────────────
+
+export type NotificationType = 'info' | 'success' | 'warning' | 'error';
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message?: string;
+  read: boolean;
+  workspace_id?: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+}
+
 export type ActivityType =
   | 'note'
   | 'call'

@@ -1,246 +1,155 @@
 """
-Notifications router: in-app notifications, email notifications,
-notification preferences, digest scheduling.
+Notification REST endpoints — list, read, and manage in-app notifications.
 
-All list responses use the docs-mandated ``{data, meta, links}`` envelope.
-All single-resource responses use ``{data: {...}}``.
+All endpoints (except ``unread_count``) require authentication and respect
+the tenant context via ``X-Tenant-ID`` header or the user's default tenant.
+
+Responses use the standard ``{data, meta, links}`` envelope for lists and
+``{data: {...}}`` for single resources.
 """
 
 from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_active_user, get_db, get_tenant_context
+from app.api.deps import get_current_active_user, get_db
+from app.core.notification_service import NotificationService
 from app.models.auth import User
 from app.schemas.base import build_list_response, build_single_response
 from app.schemas.notifications import (
-    NotificationCreate,
-    NotificationPreferencesCreate,
-    NotificationPreferencesResponse,
     NotificationResponse,
-    UnreadCountResponse,
-)
-from app.services.notifications import (
-    DigestService,
-    NotificationPreferencesService,
-    NotificationService,
+    NotificationUpdate,
 )
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
-# ── Notifications ───────────────────────────────────────────────────────────
-
-
-@router.get("")
+@router.get("", name="notification_list")
 async def list_notifications(
     request: Request,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
     page: int = Query(1, ge=1),
-    limit: int = Query(50, ge=1, le=200),
-    is_read: bool | None = Query(None),
-    notification_type: str | None = Query(None),
-    priority: str | None = Query(None),
+    per_page: int = Query(50, ge=1, le=200),
+    unread_only: bool = Query(False),
+    notification_type: str | None = Query(None, max_length=50),
 ) -> dict:
-    """List notifications for the current user.
+    """List notifications for the authenticated user.
 
+    Supports pagination, unread-only filtering, and optional type filter.
     Returns the docs-mandated ``{data, meta, links}`` envelope.
     """
-    tenant_id = await get_tenant_context(request, current_user=current_user)
-    skip = (page - 1) * limit
     service = NotificationService(db)
-    items, total = await service.list_notifications(
-        tenant_id=tenant_id,
+    notifications, total, unread_count = await service.get_notifications(
         user_id=current_user.id,
-        skip=skip,
-        limit=limit,
-        is_read=is_read,
+        page=page,
+        per_page=per_page,
+        unread_only=unread_only,
         notification_type=notification_type,
-        priority=priority,
     )
-    return build_list_response(
-        data=items,
+
+    response = build_list_response(
+        data=[NotificationResponse.model_validate(n) for n in notifications],
         total=total,
         page=page,
-        per_page=limit,
+        per_page=per_page,
         request=request,
     )
+    # Include unread count in meta for convenience
+    response["meta"]["unread_count"] = unread_count
+    return response
 
 
-@router.patch("/{notification_id}")
+@router.get("/unread-count", name="notification_unread_count")
+async def get_unread_count(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Get the count of unread notifications for the authenticated user."""
+    service = NotificationService(db)
+    count = await service.get_unread_count(user_id=current_user.id)
+    return {"data": {"unread_count": count}}
+
+
+@router.get("/{notification_id}", name="notification_detail")
+async def get_notification(
+    notification_id: UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Get a single notification by ID.
+
+    Returns the docs-mandated ``{data: {...}}`` envelope.
+    """
+    service = NotificationService(db)
+    notification = await service.get_notification(
+        notification_id=notification_id,
+        user_id=current_user.id,
+    )
+    if notification is None:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return build_single_response(NotificationResponse.model_validate(notification))
+
+
+@router.post("/{notification_id}/read", name="notification_mark_read")
 async def mark_notification_read(
     notification_id: UUID,
-    request: Request,
+    body: NotificationUpdate = None,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Mark a single notification as read.
 
+    Accepts an optional ``NotificationUpdate`` body (defaults to ``is_read=True``).
     Returns the docs-mandated ``{data: {...}}`` envelope.
     """
-    tenant_id = await get_tenant_context(request, current_user=current_user)
     service = NotificationService(db)
     notification = await service.mark_read(
-        notification_id,
-        tenant_id=tenant_id,
+        notification_id=notification_id,
         user_id=current_user.id,
     )
-    return build_single_response(notification)
+    if notification is None:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return build_single_response(NotificationResponse.model_validate(notification))
 
 
-@router.post("/read-all")
+@router.post("/read-all", name="notification_mark_all_read")
 async def mark_all_notifications_read(
-    request: Request,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
+    workspace_id: str | None = Query(None),
 ) -> dict:
-    """Mark all unread notifications as read.
+    """Mark all unread notifications as read for the authenticated user.
 
-    Returns the docs-mandated ``{data: {...}}`` envelope.
+    Optionally scope to a specific workspace via ``workspace_id`` query param.
+    Returns ``{data: {updated_count: N}}``.
     """
-    tenant_id = await get_tenant_context(request, current_user=current_user)
     service = NotificationService(db)
-    count = await service.mark_all_read(
-        tenant_id=tenant_id,
+    ws_uuid = UUID(workspace_id) if workspace_id else None
+    updated_count = await service.mark_all_read(
         user_id=current_user.id,
+        workspace_id=ws_uuid,
     )
-    return build_single_response({"marked_read": count})
+    return build_single_response({"updated_count": updated_count})
 
 
-@router.get("/unread-count")
-async def get_unread_count(
-    request: Request,
+@router.delete("/{notification_id}", status_code=204, name="notification_delete")
+async def delete_notification(
+    notification_id: UUID,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
-) -> dict:
-    """Get unread notification count.
+) -> None:
+    """Delete (soft-delete) a notification.
 
-    Returns the docs-mandated ``{data: {...}}`` envelope.
+    Returns 204 No Content on success.
     """
-    tenant_id = await get_tenant_context(request, current_user=current_user)
     service = NotificationService(db)
-    counts = await service.get_unread_count(
-        tenant_id=tenant_id,
+    deleted = await service.delete_notification(
+        notification_id=notification_id,
         user_id=current_user.id,
     )
-    return build_single_response(counts)
-
-
-# ── Notification Preferences ────────────────────────────────────────────────
-
-
-@router.get("/preferences")
-async def get_notification_preferences(
-    request: Request,
-    current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    """Get notification preferences for the current user.
-
-    Returns the docs-mandated ``{data: {...}}`` envelope.
-    """
-    tenant_id = await get_tenant_context(request, current_user=current_user)
-    service = NotificationPreferencesService(db)
-    prefs = await service.get_preferences(
-        tenant_id=tenant_id,
-        user_id=current_user.id,
-    )
-    return build_single_response(prefs)
-
-
-@router.post("/preferences")
-async def create_notification_preferences(
-    body: NotificationPreferencesCreate,
-    request: Request,
-    current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    """Create or update notification preferences.
-
-    Returns the docs-mandated ``{data: {...}}`` envelope.
-    """
-    tenant_id = await get_tenant_context(request, current_user=current_user)
-    service = NotificationPreferencesService(db)
-    prefs = await service.create_preferences(
-        tenant_id=tenant_id,
-        user_id=current_user.id,
-        channel=body.channel,
-        notification_types=body.notification_types,
-        enabled=body.enabled,
-        digest_enabled=body.digest_enabled,
-        digest_frequency=body.digest_frequency,
-        quiet_hours_start=body.quiet_hours_start,
-        quiet_hours_end=body.quiet_hours_end,
-        email_address=body.email_address,
-    )
-    return build_single_response(prefs)
-
-
-@router.patch("/preferences")
-async def update_notification_preferences(
-    body: NotificationPreferencesCreate,
-    request: Request,
-    current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    """Update notification preferences.
-
-    Returns the docs-mandated ``{data: {...}}`` envelope.
-    """
-    tenant_id = await get_tenant_context(request, current_user=current_user)
-    service = NotificationPreferencesService(db)
-    prefs = await service.update_preferences(
-        tenant_id=tenant_id,
-        user_id=current_user.id,
-        **body.model_dump(exclude_unset=True),
-    )
-    return build_single_response(prefs)
-
-
-# ── Digest ──────────────────────────────────────────────────────────────────
-
-
-@router.post("/digest/generate")
-async def generate_digest(
-    request: Request,
-    current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db),
-    frequency: str = Query("daily", regex=r"^(daily|weekly)$"),
-) -> dict:
-    """Generate a digest of unread notifications.
-
-    Returns the docs-mandated ``{data: {...}}`` envelope.
-    """
-    tenant_id = await get_tenant_context(request, current_user=current_user)
-    service = DigestService(db)
-    digest = await service.generate_digest(
-        tenant_id=tenant_id,
-        user_id=current_user.id,
-        frequency=frequency,
-    )
-    return build_single_response(digest)
-
-
-@router.post("/digest/schedule")
-async def schedule_digest(
-    request: Request,
-    current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db),
-    frequency: str = Query("daily", regex=r"^(daily|weekly|never)$"),
-) -> dict:
-    """Schedule digest delivery preferences.
-
-    Returns the docs-mandated ``{data: {...}}`` envelope.
-    """
-    tenant_id = await get_tenant_context(request, current_user=current_user)
-    service = DigestService(db)
-    result = await service.schedule_digest(
-        tenant_id=tenant_id,
-        user_id=current_user.id,
-        frequency=frequency,
-    )
-    return build_single_response(result)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Notification not found")

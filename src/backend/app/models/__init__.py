@@ -18,6 +18,8 @@ from app.models.billing import Subscription, Invoice, CreditWallet, UsageRecord
 from app.models.media import Asset
 from app.models.webhooks import Webhook, WebhookDelivery
 from app.models.analytics import AnalyticsEvent, Dashboard, MetricSnapshot, ScheduledReport
+from app.models.email import EmailCampaign, EmailMessage
+from app.models.notifications import Notification
 
 __all__ = [
     # Base
@@ -74,4 +76,9 @@ __all__ = [
     "MetricSnapshot",
     "Dashboard",
     "ScheduledReport",
+    # Notifications
+    "Notification",
+    # Email
+    "EmailCampaign",
+    "EmailMessage",
 ]

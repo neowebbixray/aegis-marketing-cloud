@@ -73,7 +73,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:
         logger.warning("Database not reachable at startup: %s", exc)
 
+    # Initialize WebSocket ConnectionManager (Redis pub/sub + heartbeat)
+    try:
+        from app.core.websocket import connection_manager
+
+        await connection_manager.initialize()
+        logger.info("WebSocket ConnectionManager initialized")
+    except Exception as exc:
+        logger.warning("WebSocket ConnectionManager init failed: %s", exc)
+
     yield  # Application runs here
+
+    # Shutdown: WebSocket ConnectionManager
+    try:
+        from app.core.websocket import connection_manager
+
+        await connection_manager.shutdown()
+        logger.info("WebSocket ConnectionManager shut down")
+    except Exception as exc:
+        logger.warning("WebSocket ConnectionManager shutdown failed: %s", exc)
 
     # Shutdown: dispose of the connection pool
     await engine.dispose()

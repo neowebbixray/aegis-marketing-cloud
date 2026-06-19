@@ -1,0 +1,255 @@
+{
+  "name": "Lead Scoring — Email Engagement & Web Activity → Deal Stage Update",
+  "nodes": [
+    {
+      "id": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+      "name": "Weekly Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+      "name": "Fetch Recent Campaigns",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 200],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.AEGIS_API_URL }}/api/v1/email/campaigns",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.AEGIS_API_KEY }}"
+            },
+            {
+              "name": "X-Workspace-ID",
+              "value": "={{ $env.AEGIS_WORKSPACE_ID }}"
+            }
+          ]
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "10"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
+      "name": "Fetch Engaged Contacts (Deliveries)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 200],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.AEGIS_API_URL }}/api/v1/email/deliveries",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.AEGIS_API_KEY }}"
+            },
+            {
+              "name": "X-Workspace-ID",
+              "value": "={{ $env.AEGIS_WORKSPACE_ID }}"
+            }
+          ]
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "200"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a",
+      "name": "Calculate Lead Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300],
+      "parameters": {
+        "language": "javascript",
+        "code": "// Combine deliveries (email engagement) into scored leads\nconst AEGIS_API_URL = $env.AEGIS_API_URL;\nconst SCORE_THRESHOLD = $env.LEAD_SCORE_THRESHOLD || 50;\n\n// Get the deliveries from previous node\nconst deliveries = $input.all()[0].json.data || [];\n\n// Track scores by contact email\nconst leadScores = {};\n\nfor (const delivery of deliveries) {\n  const email = delivery.recipient_email;\n  if (!email) continue;\n\n  if (!leadScores[email]) {\n    leadScores[email] = {\n      email,\n      name: delivery.recipient_name || '',\n      score: 0,\n      opened: 0,\n      clicked: 0,\n      campaignIds: new Set(),\n    };\n  }\n\n  const record = leadScores[email];\n\n  // +10 points per email opened\n  if (delivery.opened_at) {\n    record.score += 10;\n    record.opened += 1;\n    // Extra +15 if clicked through\n    if (delivery.click_count && delivery.click_count > 0) {\n      record.score += 15;\n      record.clicked += delivery.click_count;\n    }\n  }\n\n  // Bonus for recent engagement (within last 7 days)\n  if (delivery.opened_at) {\n    const openedDate = new Date(delivery.opened_at);\n    const now = new Date();\n    const daysAgo = (now - openedDate) / (1000 * 60 * 60 * 24);\n    if (daysAgo <= 7) {\n      record.score += 20;\n    }\n  }\n\n  if (delivery.campaign_id) {\n    record.campaignIds.add(delivery.campaign_id);\n  }\n}\n\n// Return scored leads as an array, sorted by score descending\nconst scoredLeads = Object.values(leadScores)\n  .map(l => ({\n    ...l,\n    campaignIds: Array.from(l.campaignIds),\n    score_category: l.score >= 80 ? 'hot' : l.score >= 50 ? 'warm' : 'cold',\n  }))\n  .filter(l => l.score >= Number(SCORE_THRESHOLD))\n  .sort((a, b) => b.score - a.score);\n\nreturn scoredLeads.map(lead => ({ json: lead }));"
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
+      "name": "Update Deal Stage in Aegis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 300],
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.AEGIS_API_URL }}/api/v1/crm/deals/{{ $json.deal_id || '' }}/stage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.AEGIS_API_KEY }}"
+            },
+            {
+              "name": "X-Workspace-ID",
+              "value": "={{ $env.AEGIS_WORKSPACE_ID }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "pipeline_stage_id",
+              "value": "={{ $json.score >= 80 ? $env.AEGIS_STAGE_HOT : $json.score >= 50 ? $env.AEGIS_STAGE_WARM : $env.AEGIS_STAGE_COLD }}"
+            },
+            {
+              "name": "reason",
+              "value": "Automated lead scoring: score={{ $json.score }}, category={{ $json.score_category }}, opens={{ $json.opened }}, clicks={{ $json.clicked }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "6f7a8b9c-0d1e-2f3a-4b5c-6d7e8f9a0b1c",
+      "name": "Fetch Deals Matching Contacts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 450],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.AEGIS_API_URL }}/api/v1/crm/deals",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.AEGIS_API_KEY }}"
+            },
+            {
+              "name": "X-Workspace-ID",
+              "value": "={{ $env.AEGIS_WORKSPACE_ID }}"
+            }
+          ]
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "200"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Weekly Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Recent Campaigns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Recent Campaigns": {
+      "main": [
+        [
+          {
+            "node": "Fetch Engaged Contacts (Deliveries)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Engaged Contacts (Deliveries)": {
+      "main": [
+        [
+          {
+            "node": "Calculate Lead Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Lead Score": {
+      "main": [
+        [
+          {
+            "node": "Fetch Deals Matching Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Deals Matching Contacts": {
+      "main": [
+        [
+          {
+            "node": "Update Deal Stage in Aegis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowFromCaller"
+  },
+  "staticData": null,
+  "tags": ["lead-scoring", "crm", "automation"],
+  "pinData": {}
+}

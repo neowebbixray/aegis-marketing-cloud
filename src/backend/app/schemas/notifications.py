@@ -1,92 +1,113 @@
-"""
-Pydantic schemas for the Notifications module: in-app notifications, email
-notifications, notification preferences, digest scheduling.
-"""
+"""Pydantic schemas for notifications and WebSocket messages."""
 
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from typing import Any, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 
-# ── Notification ────────────────────────────────────────────────────────────
-class NotificationResponse(BaseModel):
-    """In-app notification representation."""
+# ── Notification Types ─────────────────────────────────────────────────────────
 
-    id: UUID
-    tenant_id: UUID
-    user_id: UUID
-    notification_type: str  # alert, mention, system, digest, campaign, workflow
-    title: str
-    body: Optional[str] = None
-    channel: str  # in_app, email, both
-    priority: str = "normal"  # low, normal, high, urgent
-    is_read: bool = False
-    is_dismissed: bool = False
-    action_url: Optional[str] = None
-    action_label: Optional[str] = None
-    metadata: Optional[dict[str, Any]] = None
-    read_at: Optional[datetime] = None
-    created_at: datetime
 
-    model_config = {"from_attributes": True}
+class NotificationType(str, Enum):
+    """All supported notification types."""
+
+    EMAIL_SENT = "email_sent"
+    WEBHOOK_FAILED = "webhook_failed"
+    INVOICE_PAID = "invoice_paid"
+    AGENT_COMPLETED = "agent_completed"
+    AGENT_FAILED = "agent_failed"
+    SUBSCRIPTION_EXPIRING = "subscription_expiring"
+    CREDIT_LOW = "credit_low"
+    CAMPAIGN_COMPLETED = "campaign_completed"
+    CONTACT_IMPORTED = "contact_imported"
+    SYSTEM_ALERT = "system_alert"
+    TASK_ASSIGNED = "task_assigned"
+    MENTION = "mention"
+    WEBHOOK_DELIVERED = "webhook_delivered"
+    BILLING_ISSUE = "billing_issue"
+    DATA_EXPORT_READY = "data_export_ready"
+    API_KEY_CREATED = "api_key_created"
+
+
+# ── Notification Schemas ───────────────────────────────────────────────────────
 
 
 class NotificationCreate(BaseModel):
-    """Payload for creating a notification (typically internal)."""
+    """Payload for creating a notification programmatically."""
 
-    tenant_id: UUID
     user_id: UUID
-    notification_type: str = Field(..., max_length=64)
-    title: str = Field(..., min_length=1, max_length=512)
-    body: Optional[str] = None
-    channel: str = Field(default="in_app", max_length=16)
-    priority: str = Field(default="normal", max_length=16)
-    action_url: Optional[str] = None
-    action_label: Optional[str] = None
-    metadata: Optional[dict[str, Any]] = None
+    workspace_id: UUID | None = None
+    notification_type: NotificationType
+    title: str = Field(..., max_length=255)
+    message: str = Field(..., max_length=2000)
+    data: dict[str, Any] = Field(default_factory=dict)
+    action_url: str | None = Field(None, max_length=2048)
+    priority: str = Field(default="normal", pattern=r"^(low|normal|high|critical)$")
 
 
-class UnreadCountResponse(BaseModel):
-    """Unread notification count."""
+class NotificationUpdate(BaseModel):
+    """Payload for updating a notification (e.g. marking as read)."""
 
-    total: int = 0
-    by_type: Optional[dict[str, int]] = None
-    by_priority: Optional[dict[str, int]] = None
+    is_read: bool = True
 
 
-# ── Notification Preferences ────────────────────────────────────────────────
-class NotificationPreferencesCreate(BaseModel):
-    """Payload for POST /notifications/preferences."""
-
-    channel: str = Field(default="in_app", max_length=16)
-    notification_types: list[str] = Field(default_factory=lambda: ["all"])
-    enabled: bool = True
-    digest_enabled: bool = False
-    digest_frequency: str = Field(default="daily", max_length=16)  # daily, weekly, never
-    quiet_hours_start: Optional[str] = None  # HH:MM format
-    quiet_hours_end: Optional[str] = None
-    email_address: Optional[str] = None
-
-
-class NotificationPreferencesResponse(BaseModel):
-    """User notification preferences representation."""
+class NotificationResponse(BaseModel):
+    """Notification representation returned by the API."""
 
     id: UUID
     user_id: UUID
-    tenant_id: UUID
-    channel: str
-    notification_types: list[str]
-    enabled: bool
-    digest_enabled: bool
-    digest_frequency: str
-    quiet_hours_start: Optional[str] = None
-    quiet_hours_end: Optional[str] = None
-    email_address: Optional[str] = None
+    workspace_id: UUID | None = None
+    notification_type: str
+    title: str
+    message: str
+    data: dict[str, Any]
+    action_url: str | None = None
+    priority: str
+    is_read: bool
+    read_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class NotificationListResponse(BaseModel):
+    """Paginated list of notifications."""
+
+    data: list[NotificationResponse]
+    total: int
+    unread_count: int
+    page: int
+    per_page: int
+
+
+# ── WebSocket Message Schemas ──────────────────────────────────────────────────
+
+
+class WebSocketMessageType(str, Enum):
+    """Types of messages sent over the WebSocket connection."""
+
+    NOTIFICATION = "notification"
+    EVENT = "event"
+    HEARTBEAT = "heartbeat"
+    HEARTBEAT_ACK = "heartbeat_ack"
+    TYPING = "typing"
+    STATUS_UPDATE = "status_update"
+    ERROR = "error"
+    CONNECTED = "connected"
+
+
+class WebSocketMessage(BaseModel):
+    """Standard WebSocket message envelope."""
+
+    type: WebSocketMessageType
+    payload: dict[str, Any] = Field(default_factory=dict)
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
+    notification_id: str | None = None
+
+    model_config = {"json_schema_extra": {"example": {"type": "notification", "payload": {"title": "Email sent", "message": "Campaign completed"}, "timestamp": "2026-06-19T12:00:00Z"}}}

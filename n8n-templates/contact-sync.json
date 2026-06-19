@@ -1,0 +1,227 @@
+{
+  "name": "Contact Sync — Aegis → Google Sheets / Mailchimp",
+  "nodes": [
+    {
+      "id": "6c5f5d1c-8a3e-4b2f-9e1a-7d3f5c8b2a1e",
+      "name": "Webhook (New Contact Created)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {
+        "path": "aegis-contact-sync",
+        "responseMode": "lastNode",
+        "responseData": "",
+        "options": {}
+      },
+      "webhookId": "aegis-contact-sync"
+    },
+    {
+      "id": "7d6a5e2d-9b4f-5c3a-0e2b-8e4a6d9c3b2f",
+      "name": "Lookup Contact in Aegis CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.AEGIS_API_URL }}/api/v1/crm/contacts/{{ $json.body.contact_id || $json.query.contact_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.AEGIS_API_KEY }}"
+            },
+            {
+              "name": "X-Workspace-ID",
+              "value": "={{ $env.AEGIS_WORKSPACE_ID }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "8e7b6a3e-0c5a-6d4b-1a3c-9f5b7e0d4c3a",
+      "name": "Sync to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [650, 200],
+      "parameters": {
+        "operation": "append",
+        "sheetId": "={{ $env.GOOGLE_SHEET_ID }}",
+        "range": "Contacts!A:G",
+        "options": {
+          "cellFormat": "USER_ENTERED",
+          "dateTimeRenderOption": "FORMATTED_STRING",
+          "valueInputOption": "RAW"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.data.id }}",
+            "email": "={{ $json.data.email }}",
+            "firstName": "={{ $json.data.first_name }}",
+            "lastName": "={{ $json.data.last_name }}",
+            "company": "={{ $json.data.company }}",
+            "phone": "={{ $json.data.phone }}",
+            "createdAt": "={{ $json.data.created_at }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "9f8c7b4f-1d6b-7e5c-2b4d-0a6c8f1e5d4b",
+      "name": "Sync to Mailchimp",
+      "type": "n8n-nodes-base.mautic",
+      "typeVersion": 1,
+      "position": [650, 450],
+      "parameters": {
+        "resource": "contacts",
+        "operation": "create",
+        "jsonParameters": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "email",
+              "value": "={{ $json.data.email }}"
+            },
+            {
+              "name": "first_name",
+              "value": "={{ $json.data.first_name }}"
+            },
+            {
+              "name": "last_name",
+              "value": "={{ $json.data.last_name }}"
+            },
+            {
+              "name": "company",
+              "value": "={{ $json.data.company }}"
+            },
+            {
+              "name": "phone",
+              "value": "={{ $json.data.phone }}"
+            },
+            {
+              "name": "tags",
+              "value": "aegis-sync"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "mauticApi": {
+          "id": "{{ $env.MAUTIC_CREDENTIAL_ID }}",
+          "name": "Mailchimp / Mautic API"
+        }
+      }
+    },
+    {
+      "id": "0a9d8c5a-2e7c-8f6d-3c5e-1b7d9a2f6e5c",
+      "name": "Log Activity in Aegis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 350],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AEGIS_API_URL }}/api/v1/crm/activities",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.AEGIS_API_KEY }}"
+            },
+            {
+              "name": "X-Workspace-ID",
+              "value": "={{ $env.AEGIS_WORKSPACE_ID }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "type",
+              "value": "contact_synced"
+            },
+            {
+              "name": "description",
+              "value": "Contact {{ $json.data.email }} synced to external platforms (Google Sheets, Mailchimp)"
+            },
+            {
+              "name": "contact_id",
+              "value": "={{ $json.data.id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook (New Contact Created)": {
+      "main": [
+        [
+          {
+            "node": "Lookup Contact in Aegis CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Contact in Aegis CRM": {
+      "main": [
+        [
+          {
+            "node": "Sync to Google Sheets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Sync to Mailchimp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync to Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Log Activity in Aegis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync to Mailchimp": {
+      "main": [
+        [
+          {
+            "node": "Log Activity in Aegis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowFromCaller"
+  },
+  "staticData": null,
+  "tags": [],
+  "pinData": {}
+}

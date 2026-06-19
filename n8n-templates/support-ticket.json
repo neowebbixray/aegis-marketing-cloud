@@ -1,0 +1,315 @@
+{
+  "name": "Support Ticket → Aegis Contact Creator (High-Priority Email)",
+  "nodes": [
+    {
+      "id": "e7f8a9b0-c1d2-3456-7890-abcdef123456",
+      "name": "Email Trigger (IMAP)",
+      "type": "n8n-nodes-base.emailImap",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "parameters": {
+        "criteria": "UNSEEN",
+        "options": {
+          "boxName": "INBOX"
+        }
+      },
+      "credentials": {
+        "imap": {
+          "id": "{{ $env.EMAIL_CREDENTIAL_ID }}",
+          "name": "Support Mailbox IMAP"
+        }
+      }
+    },
+    {
+      "id": "f8a9b0c1-d2e3-4567-8901-bcdef1234567",
+      "name": "Filter High-Priority Emails",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [450, 300],
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.subject ? $json.subject.toLowerCase() : '' }}",
+        "rules": [
+          {
+            "value2": "urgent",
+            "output": 0
+          },
+          {
+            "value2": "high priority",
+            "output": 0
+          },
+          {
+            "value2": "support",
+            "output": 0
+          },
+          {
+            "value2": "issue",
+            "output": 0
+          }
+        ],
+        "fallbackOutput": 1,
+        "options": {
+          "caseSensitive": false
+        }
+      }
+    },
+    {
+      "id": "0a1b2c3d-4e5f-6789-abcd-ef0123456789",
+      "name": "Check Priority Header",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [450, 450],
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ ($json.headers || {}).priority || '' }}",
+        "rules": [
+          {
+            "value2": "urgent",
+            "output": 0
+          },
+          {
+            "value2": "high",
+            "output": 0
+          }
+        ],
+        "fallbackOutput": 1,
+        "options": {
+          "caseSensitive": false
+        }
+      }
+    },
+    {
+      "id": "1b2c3d4e-5f6a-7890-bcde-fa1234567890",
+      "name": "Extract Contact Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "parameters": {
+        "language": "javascript",
+        "code": "// Extract contact info from the incoming support email\nconst email = $json;\n\n// Parse name from From header (\"Name <email@domain.com>\")\nconst fromHeader = email.from || '';\nlet name = '';\nlet emailAddress = '';\n\nconst match = fromHeader.match(/^\"?([^\"]*)\"?\\s*<([^>]+)>/);\nif (match) {\n  name = match[1].trim();\n  emailAddress = match[2].trim();\n} else if (fromHeader.includes('<')) {\n  const parts = fromHeader.split('<');\n  emailAddress = parts[parts.length - 1].replace('>', '').trim();\n  name = parts[0].trim();\n} else {\n  emailAddress = fromHeader.trim();\n}\n\n// Extract a potential phone number from email body\nconst body = (email.html || email.text || email.body || '').toLowerCase();\nconst phoneRegex = /(\\+?1?[- .]?\\(?\\d{3}\\)?[- .]?\\d{3}[- .]?\\d{4})/g;\nconst phoneMatch = body.match(phoneRegex);\nconst phone = phoneMatch ? phoneMatch[0].trim() : '';\n\n// Extract subject as ticket description\nconst subject = email.subject || 'No Subject';\nconst textBody = email.text || email.body || '';\n\nreturn [{\n  json: {\n    email: emailAddress,\n    name: name || emailAddress.split('@')[0],\n    phone: phone,\n    subject: subject,\n    description: textBody.substring(0, 2000),\n    priority: 'high',\n    source: 'support-ticket-email',\n    company: '',\n  },\n}];"
+      }
+    },
+    {
+      "id": "2c3d4e5f-6a7b-8901-cdef-ab1234567890",
+      "name": "Create Contact in Aegis CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AEGIS_API_URL }}/api/v1/crm/contacts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.AEGIS_API_KEY }}"
+            },
+            {
+              "name": "X-Workspace-ID",
+              "value": "={{ $env.AEGIS_WORKSPACE_ID }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "email",
+              "value": "={{ $json.email }}"
+            },
+            {
+              "name": "first_name",
+              "value": "={{ $json.name.split(' ')[0] || $json.name }}"
+            },
+            {
+              "name": "last_name",
+              "value": "={{ $json.name.split(' ').slice(1).join(' ') || '' }}"
+            },
+            {
+              "name": "phone",
+              "value": "={{ $json.phone }}"
+            },
+            {
+              "name": "company",
+              "value": "={{ $json.company }}"
+            },
+            {
+              "name": "source",
+              "value": "support_ticket"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "3d4e5f6a-7b8c-9012-defa-bc1234567890",
+      "name": "Log Support Activity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AEGIS_API_URL }}/api/v1/crm/activities",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.AEGIS_API_KEY }}"
+            },
+            {
+              "name": "X-Workspace-ID",
+              "value": "={{ $env.AEGIS_WORKSPACE_ID }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "type",
+              "value": "support_ticket"
+            },
+            {
+              "name": "description",
+              "value": "={{ `High-priority ticket: ${$json.subject}` }}"
+            },
+            {
+              "name": "contact_id",
+              "value": "={{ $json.data ? $json.data.id : '' }}"
+            },
+            {
+              "name": "details",
+              "value": "={{ $json.description }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "4e5f6a7b-8c9d-0123-efab-cd1234567890",
+      "name": "Notify Internal Channel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL || '' }}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{ `🚨 *High-Priority Support Ticket Received*\n*From:* ${$json.email} (${$json.name})\n*Subject:* ${$json.subject}\n*Contact Created:* ${$json.data ? $json.data.id : 'Failed'}\n*Action Needed:* Review within 1 hour.` }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Email Trigger (IMAP)": {
+      "main": [
+        [
+          {
+            "node": "Filter High-Priority Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter High-Priority Emails": {
+      "main": [
+        [
+          {
+            "node": "Extract Contact Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Priority Header",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Priority Header": {
+      "main": [
+        [
+          {
+            "node": "Extract Contact Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Extract Contact Info": {
+      "main": [
+        [
+          {
+            "node": "Create Contact in Aegis CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Contact in Aegis CRM": {
+      "main": [
+        [
+          {
+            "node": "Log Support Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Support Activity": {
+      "main": [
+        [
+          {
+            "node": "Notify Internal Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowFromCaller"
+  },
+  "staticData": null,
+  "tags": ["support", "crm", "email", "automation"],
+  "pinData": {}
+}

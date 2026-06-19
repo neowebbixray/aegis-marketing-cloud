@@ -1,0 +1,246 @@
+{
+  "name": "Social Scheduler — Publish Aegis Content Drafts to Social Platforms",
+  "nodes": [
+    {
+      "id": "f0e1d2c3-b4a5-6789-0abc-def123456789",
+      "name": "Daily Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8,12,16 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "1a2b3c4d-5e6f-7a8b-9c0d-ef1234567890",
+      "name": "Fetch Scheduled Social Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.AEGIS_API_URL }}/api/v1/social/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.AEGIS_API_KEY }}"
+            },
+            {
+              "name": "X-Workspace-ID",
+              "value": "={{ $env.AEGIS_WORKSPACE_ID }}"
+            }
+          ]
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "scheduled"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "2b3c4d5e-6f7a-8b9c-0d1e-fa1234567890",
+      "name": "Filter Due Posts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "parameters": {
+        "language": "javascript",
+        "code": "// Filter posts that are due to be published now\n// Check if scheduled_at is within the current window\nconst posts = $input.all();\nconst now = new Date();\n// Look at posts scheduled within the next 60 minutes\nconst windowEnd = new Date(now.getTime() + 60 * 60 * 1000);\n\nconst duePosts = [];\n\nfor (const item of posts) {\n  const post = item.json;\n  // Handle both list response envelope and single item\n  const postData = post.data || post;\n  const itemsArray = Array.isArray(postData) ? postData : [postData];\n\n  for (const p of itemsArray) {\n    if (!p.scheduled_at) continue;\n\n    const scheduledDate = new Date(p.scheduled_at);\n    if (scheduledDate >= now && scheduledDate <= windowEnd) {\n      duePosts.push({\n        post_id: p.id,\n        platform: p.platform,\n        content: p.content,\n        media_urls: p.media_urls || [],\n        tags: p.tags || [],\n        campaign_id: p.campaign_id,\n        scheduled_at: p.scheduled_at,\n      });\n    }\n  }\n}\n\nif (duePosts.length === 0) {\n  // Return a sentinel so the workflow can stop early\n  return [{ json: { _no_posts_due: true } }];\n}\n\nreturn duePosts.map(post => ({ json: post }));"
+      }
+    },
+    {
+      "id": "3c4d5e6f-7a8b-9c0d-1e2f-ab1234567890",
+      "name": "Check Due Posts",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [650, 450],
+      "parameters": {
+        "dataType": "boolean",
+        "value1": "={{ $json._no_posts_due === true }}",
+        "rules": [
+          {
+            "value2": true,
+            "output": 0
+          }
+        ],
+        "fallbackOutput": 1
+      }
+    },
+    {
+      "id": "4d5e6f7a-8b9c-0d1e-2f3a-bc1234567890",
+      "name": "Publish Post via Aegis API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AEGIS_API_URL }}/api/v1/social/posts/{{ $json.post_id }}/publish",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.AEGIS_API_KEY }}"
+            },
+            {
+              "name": "X-Workspace-ID",
+              "value": "={{ $env.AEGIS_WORKSPACE_ID }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "5e6f7a8b-9c0d-1e2f-3a4b-cd1234567890",
+      "name": "Update Post Status in Aegis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 300],
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.AEGIS_API_URL }}/api/v1/social/posts/{{ $json.post_id || $json.data.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.AEGIS_API_KEY }}"
+            },
+            {
+              "name": "X-Workspace-ID",
+              "value": "={{ $env.AEGIS_WORKSPACE_ID }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "published"
+            },
+            {
+              "name": "published_at",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "6f7a8b9c-0d1e-2f3a-4b5c-de1234567890",
+      "name": "No-Op (Skip)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [850, 500],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Daily Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Scheduled Social Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Scheduled Social Posts": {
+      "main": [
+        [
+          {
+            "node": "Filter Due Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Due Posts": {
+      "main": [
+        [
+          {
+            "node": "Check Due Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Due Posts": {
+      "main": [
+        [
+          {
+            "node": "No-Op (Skip)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Publish Post via Aegis API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish Post via Aegis API": {
+      "main": [
+        [
+          {
+            "node": "Update Post Status in Aegis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowFromCaller"
+  },
+  "staticData": null,
+  "tags": ["social", "scheduler", "publishing", "automation"],
+  "pinData": {}
+}

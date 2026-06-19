@@ -1,0 +1,224 @@
+{
+  "name": "Campaign Report — Weekly Email Performance → Slack",
+  "nodes": [
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Weekly Cron Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * 1"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "name": "Fetch Email Campaigns",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.AEGIS_API_URL }}/api/v1/email/campaigns",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.AEGIS_API_KEY }}"
+            },
+            {
+              "name": "X-Workspace-ID",
+              "value": "={{ $env.AEGIS_WORKSPACE_ID }}"
+            }
+          ]
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "name": "Fetch Campaign Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.AEGIS_API_URL }}/api/v1/analytics/campaigns/{{ $json.data.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.AEGIS_API_KEY }}"
+            },
+            {
+              "name": "X-Workspace-ID",
+              "value": "={{ $env.AEGIS_WORKSPACE_ID }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "d4e5f6a7-b8c9-0123-defa-234567890123",
+      "name": "Build Report Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300],
+      "parameters": {
+        "language": "javascript",
+        "code": "// Build a weekly campaign performance report\nconst campaigns = $input.all();\n\nconst reportLines = [\n  '📊 *Aegis Marketing Cloud — Weekly Campaign Report*',\n  `📅 *Week of:* ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`,\n  '',\n  '━━━━━━━━━━━━━━━━━━━━━━━━━━',\n  '',\n];\n\nlet totalSent = 0;\nlet totalDelivered = 0;\nlet totalOpened = 0;\nlet totalClicked = 0;\nlet totalBounced = 0;\nlet totalComplained = 0;\nlet campaignCount = 0;\n\nfor (const item of campaigns) {\n  const campaign = item.json.data || item.json;\n  const name = campaign.name || campaign.campaign_name || 'Untitled Campaign';\n  const sent = campaign.total_recipients || campaign.sent_count || 0;\n  const delivered = campaign.delivered_count || 0;\n  const opened = campaign.opened_count || 0;\n  const clicked = campaign.clicked_count || 0;\n  const bounced = campaign.bounced_count || 0;\n  const complained = campaign.complained_count || 0;\n  const status = campaign.status || 'completed';\n\n  totalSent += sent;\n  totalDelivered += delivered;\n  totalOpened += opened;\n  totalClicked += clicked;\n  totalBounced += bounced;\n  totalComplained += complained;\n  campaignCount++;\n\n  const openRate = delivered > 0 ? ((opened / delivered) * 100).toFixed(1) : '0.0';\n  const clickRate = delivered > 0 ? ((clicked / delivered) * 100).toFixed(1) : '0.0';\n  const bounceRate = sent > 0 ? ((bounced / sent) * 100).toFixed(1) : '0.0';\n\n  reportLines.push(\n    `📧 *${name}* (${status})`,\n    `   • Sent: ${sent}  |  Delivered: ${delivered}`,\n    `   • Opens: ${opened} (${openRate}%)  |  Clicks: ${clicked} (${clickRate}%)`,\n    `   • Bounces: ${bounced} (${bounceRate}%)  |  Complaints: ${complained}`,\n    ''\n  );\n}\n\n// Summary row\nconst overallOpenRate = totalDelivered > 0 ? ((totalOpened / totalDelivered) * 100).toFixed(1) : '0.0';\nconst overallClickRate = totalDelivered > 0 ? ((totalClicked / totalDelivered) * 100).toFixed(1) : '0.0';\n\nreportLines.push(\n  '━━━━━━━━━━━━━━━━━━━━━━━━━━',\n  `*📈 Summary (${campaignCount} campaigns)*`,\n  `   • Total Sent: ${totalSent}`,\n  `   • Total Delivered: ${totalDelivered}`,\n  `   • Overall Open Rate: ${overallOpenRate}%`,\n  `   • Overall Click Rate: ${overallClickRate}%`,\n  `   • Total Bounces: ${totalBounced}`,\n  `   • Total Complaints: ${totalComplained}`,\n  '',\n  `🤖 *Generated by:* Aegis n8n Workflow — campaign-report.json`\n);\n\nreturn [{\n  json: {\n    blocks: [\n      {\n        type: 'section',\n        text: {\n          type: 'mrkdwn',\n          text: reportLines.join('\\n'),\n        },\n      },\n    ],\n  },\n}];"
+      }
+    },
+    {
+      "id": "e5f6a7b8-c9d0-1234-efab-345678901234",
+      "name": "Send to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [1050, 300],
+      "parameters": {
+        "channel": "={{ $env.SLACK_REPORT_CHANNEL || '#marketing-reports' }}",
+        "jsonParameters": false,
+        "messageType": "postMessage",
+        "otherOptions": {
+          "icon_emoji": ":email:",
+          "username": "Aegis Campaign Reporter",
+          "unfurl_links": false,
+          "unfurl_media": false
+        }
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "{{ $env.SLACK_CREDENTIAL_ID }}",
+          "name": "Slack Workspace"
+        }
+      }
+    },
+    {
+      "id": "f6a7b8c9-d0e1-2345-fabc-456789012345",
+      "name": "Archive Report to Aegis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AEGIS_API_URL }}/api/v1/analytics/reports/generate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.AEGIS_API_KEY }}"
+            },
+            {
+              "name": "X-Workspace-ID",
+              "value": "={{ $env.AEGIS_WORKSPACE_ID }}"
+            }
+          ]
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "report_id",
+              "value": "={{ $env.AEGIS_WEEKLY_REPORT_ID || '' }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Weekly Cron Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Email Campaigns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Email Campaigns": {
+      "main": [
+        [
+          {
+            "node": "Fetch Campaign Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Campaign Analytics": {
+      "main": [
+        [
+          {
+            "node": "Build Report Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Report Summary": {
+      "main": [
+        [
+          {
+            "node": "Send to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Slack": {
+      "main": [
+        [
+          {
+            "node": "Archive Report to Aegis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowFromCaller"
+  },
+  "staticData": null,
+  "tags": ["reporting", "slack", "email", "weekly"],
+  "pinData": {}
+}

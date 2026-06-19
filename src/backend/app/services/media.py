@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.exceptions import NotFoundException, ValidationException
+from app.core.file_validator import FileCategory, validate_file
 from app.models.media import Asset
 from app.services.base import BaseService
 
@@ -161,14 +162,28 @@ class MediaService(BaseService[Asset]):
         content = await file.read()
         size_bytes = len(content)
 
-        # Determine filename and MIME type
+        # ── File validation ─────────────────────────────────────────────────
         original_filename = getattr(file, "filename", None) or "unnamed"
-        filename = f"{uuid.uuid4().hex}_{original_filename}"
-        mime_type = (
-            getattr(file, "content_type", None)
+        client_content_type = getattr(file, "content_type", None)
+
+        validation = validate_file(
+            file_bytes=content,
+            filename=original_filename,
+            content_type=client_content_type,
+        )
+        if not validation.is_valid:
+            raise ValidationException(detail=validation.error)
+
+        # Use validated MIME type and category
+        mime_type = validation.mime_type or (
+            client_content_type
             or mimetypes.guess_type(original_filename)[0]
             or "application/octet-stream"
         )
+        validated_category = validation.category.value if validation.category else None
+
+        # Determine filename and MIME type
+        filename = f"{uuid.uuid4().hex}_{original_filename}"
 
         # Compute checksum (SHA-256)
         checksum = hashlib.sha256(content).hexdigest()
@@ -177,7 +192,8 @@ class MediaService(BaseService[Asset]):
         width, height = await self._get_image_dimensions(content, mime_type)
 
         # Build storage path: tenant_id/category/filename
-        storage_path = f"{tenant_id}/{category or 'uncategorised'}/{filename}"
+        effective_category = validated_category or category or "uncategorised"
+        storage_path = f"{tenant_id}/{effective_category}/{filename}"
 
         # Persist to storage backend
         if self._minio is not None:
@@ -207,7 +223,7 @@ class MediaService(BaseService[Asset]):
             size_bytes=size_bytes,
             storage_path=storage_path,
             storage_backend=storage_backend,
-            category=category,
+            category=effective_category if effective_category != "uncategorised" else category,
             alt_text=alt_text,
             width=width,
             height=height,

@@ -35,8 +35,8 @@ from typing import List, Tuple
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 REQUIRED_DIRECTORIES: List[str] = [
-    "backend",
-    "frontend",
+    "src/backend",
+    "src/frontend",
     "docs",
     "infra",
     "scripts",
@@ -162,19 +162,19 @@ def check_directories() -> int:
 
     # Backend sub-structure
     for sub in BACKEND_SUBDIRS:
-        d = PROJECT_ROOT / "backend" / sub
+        d = PROJECT_ROOT / "src/backend" / sub
         if d.is_dir():
-            ok(f"backend/{sub}/")
+            ok(f"src/backend/{sub}/")
         else:
-            warn(f"backend/{sub}/ — missing (optional for early stage)")
+            warn(f"src/backend/{sub}/ — missing (optional for early stage)")
 
     # Frontend sub-structure
     for sub in FRONTEND_SUBDIRS:
-        d = PROJECT_ROOT / "frontend" / sub
+        d = PROJECT_ROOT / "src/frontend" / sub
         if d.is_dir():
-            ok(f"frontend/{sub}/")
+            ok(f"src/frontend/{sub}/")
         else:
-            warn(f"frontend/{sub}/ — missing (optional for early stage)")
+            warn(f"src/frontend/{sub}/ — missing (optional for early stage)")
 
     # Infra sub-structure
     for sub in INFRA_SUBDIRS:
@@ -202,7 +202,7 @@ def check_root_files() -> int:
             errors += 1
 
     # Dockerfiles (can live in component dirs)
-    dockerfiles = ["backend/Dockerfile", "frontend/Dockerfile"]
+    dockerfiles = ["src/backend/Dockerfile", "src/frontend/Dockerfile"]
     for df in dockerfiles:
         f = PROJECT_ROOT / df
         if f.is_file():
@@ -285,8 +285,8 @@ def check_dockerfiles() -> int:
     heading("Dockerfile Validation")
 
     dockerfile_paths = [
-        PROJECT_ROOT / "backend" / "Dockerfile",
-        PROJECT_ROOT / "frontend" / "Dockerfile",
+        PROJECT_ROOT / "src/backend" / "Dockerfile",
+        PROJECT_ROOT / "src/frontend" / "Dockerfile",
     ]
 
     for df_path in dockerfile_paths:

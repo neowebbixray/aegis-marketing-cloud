@@ -1,6 +1,6 @@
 __pycache__/
 *.py[cod]
-*.egg-info/
+*.pyc
 .env
 .venv/
 venv/
@@ -8,6 +8,9 @@ node_modules/
 .next/
 dist/
 build/
+.terraform/
+*.tfstate*
+*.tfstate.backup
 *.db
 *.sqlite3
 coverage/
@@ -20,6 +23,7 @@ site/
 .ruff_cache/
 .history/
 *.log
+*.egg-info/
 docker-data/
 *.pem
 *.pub.pem

@@ -112,7 +112,7 @@ services:
       QDRANT__SERVICE__GRPC_PORT: "6334"
       QDRANT__SERVICE__GRPC_ENABLED: "true"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      test: ["CMD", "sh", "-c", "timeout 1 bash -c ': > /dev/tcp/localhost/6333'"]
       interval: 15s
     logging: *default-logging
 

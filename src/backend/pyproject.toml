@@ -43,6 +43,7 @@ dev = [
     "httpx>=0.27.0",
     "factory_boy>=3.3.0",
     "Faker>=22.0.0",
+    "asgi_lifespan>=0.4.0",
 ]
 
 [tool.setuptools.packages.find]

@@ -277,10 +277,8 @@ class InstallationService(BaseService):
         }
 
 
-class ReviewService(BaseService):
+class ReviewService:
     """Manage marketplace listing reviews and ratings."""
-
-    model = Campaign
 
     async def create_review(
         self,

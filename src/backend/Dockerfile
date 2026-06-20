@@ -18,15 +18,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy dependency metadata first for layer caching
 COPY pyproject.toml ./
 
-# Install project in editable mode
-RUN pip install --no-cache-dir -e ".[dev]"
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
-
 # ── Development target ──────────────────────────────────────────────────────
 FROM base AS development
+
+# Install project in editable mode with dev dependencies
+RUN pip install --no-cache-dir -e ".[dev]"
 
 # Install watchfiles for hot-reload
 RUN pip install --no-cache-dir watchfiles
@@ -41,12 +37,18 @@ CMD ["uvicorn", "app.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000
 # ── Test target ─────────────────────────────────────────────────────────────
 FROM base AS test
 
+# Install project in editable mode with dev dependencies (for testing)
+RUN pip install --no-cache-dir -e ".[dev]"
+
 COPY . .
 
 CMD ["pytest", "tests/", "-v", "--cov=app", "--cov-report=term-missing"]
 
 # ── Production target ───────────────────────────────────────────────────────
 FROM base AS production
+
+# Install project in editable mode (runtime only)
+RUN pip install --no-cache-dir -e "."
 
 COPY . .
 

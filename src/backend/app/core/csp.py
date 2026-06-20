@@ -1,5 +1,4 @@
-"""
-Content-Security-Policy (CSP) middleware for Aegis Marketing Cloud.
+"""Content-Security-Policy (CSP) middleware for Aegis Marketing Cloud.
 
 Sets strict CSP headers on every response to mitigate XSS, data injection,
 and other content-based attacks.  The policy is configurable via ``CSP_*``
@@ -9,7 +8,7 @@ environment variables so operators can tighten or relax rules per deployment.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Awaitable
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -99,8 +98,11 @@ class CSPMiddleware(BaseHTTPMiddleware):
             return {k.replace("_", "-"): v for k, v in overrides.items()}
 
         # Otherwise pick individual CSP_* env vars from settings
+        skip_fields = {"csp_enabled", "csp_report_only", "csp_directives"}
         for field_name in dir(settings):
             if not field_name.startswith("csp_"):
+                continue
+            if field_name in skip_fields:
                 continue
             # Normalise: csp_script_src -> script-src
             directive_name = field_name[4:].replace("_", "-").lower()

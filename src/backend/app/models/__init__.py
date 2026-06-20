@@ -10,6 +10,7 @@ from app.models.tenant import (
     Permission,
     RolePermission,
     UserRole,
+    PendingInvitation,
 )
 from app.models.crm import Contact, Deal, Pipeline, PipelineStage, Activity
 from app.models.marketing import Campaign, EmailTemplate, LandingPage, Funnel, Segment, Tag
@@ -19,7 +20,9 @@ from app.models.media import Asset
 from app.models.webhooks import Webhook, WebhookDelivery
 from app.models.analytics import AnalyticsEvent, Dashboard, MetricSnapshot, ScheduledReport
 from app.models.email import EmailCampaign, EmailMessage
+from app.models.marketplace import MarketplaceInstallation
 from app.models.notifications import Notification
+from app.models.seo import SeoKeyword
 
 __all__ = [
     # Base
@@ -42,6 +45,7 @@ __all__ = [
     "Permission",
     "RolePermission",
     "UserRole",
+    "PendingInvitation",
     # CRM
     "Contact",
     "Deal",
@@ -76,8 +80,14 @@ __all__ = [
     "MetricSnapshot",
     "Dashboard",
     "ScheduledReport",
+    # Marketplace
+    "MarketplaceInstallation",
     # Notifications
     "Notification",
+    # SEO
+    "SeoKeyword",
+    # Social
+    "SocialPost",
     # Email
     "EmailCampaign",
     "EmailMessage",

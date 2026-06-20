@@ -8,13 +8,17 @@ from __future__ import annotations
 import uuid
 from typing import Any, Optional
 
+from datetime import datetime
+
 from sqlalchemy import (
     Boolean,
+    DateTime,
     ForeignKey,
     Index,
     String,
     Text,
     Uuid,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -204,3 +208,37 @@ class UserRole(BaseModel):
     __table_args__ = (
         Index("ix_user_role_unique", "user_id", "role_id", "workspace_id", unique=True),
     )
+
+
+class PendingInvitation(BaseModel):
+    """Invitation sent to a user who does not yet have an account in the system.
+
+    When the invited user signs up, they can accept the invitation using the token.
+    """
+
+    __tablename__ = "pending_invitations"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    workspace_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
+    )
+    email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
+    role_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
+    )
+    invited_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    token: Mapped[str] = mapped_column(String(128), unique=True, nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        default=None,  # set in application code
+    )
+    accepted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    def __repr__(self) -> str:
+        return f"<PendingInvitation {self.email}>"

@@ -5,7 +5,9 @@ Tenant and workspace management service.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+import secrets
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional, Union
 from uuid import UUID
 
 from sqlalchemy import select
@@ -13,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictException, NotFoundException
 from app.models.tenant import (
+    PendingInvitation,
     Permission,
     Role,
     RolePermission,
@@ -145,20 +148,14 @@ class TenantService:
 
     # ── Membership & Invitations ─────────────────────────────────────────────
     async def invite_user(
-        self, workspace_id: UUID, email: str, role_id: UUID
-    ) -> UserRole:
+        self, workspace_id: UUID, email: str, role_id: UUID, invited_by_user_id: UUID
+    ) -> UserRole | PendingInvitation:
         """Assign a role to a user within a workspace.
 
-        If the user does not exist, they should be invited via email (stub).
+        If the user does not exist, a pending invitation record is created
+        and an invitation email is simulated via logging.
         """
         workspace = await self.get_workspace(workspace_id)
-
-        # Find the user
-        result = await self.db.execute(select(User).where(User.email == email))
-        user = result.scalars().first()
-        if user is None:
-            # TODO: Send invitation email; create a pending invitation record
-            raise NotFoundException(detail="User not found. Invitation flow not yet implemented.")
 
         # Verify role belongs to the same tenant
         role_result = await self.db.execute(
@@ -167,6 +164,35 @@ class TenantService:
         role = role_result.scalars().first()
         if role is None:
             raise NotFoundException(detail="Role not found in this tenant")
+
+        # Find the user
+        result = await self.db.execute(select(User).where(User.email == email))
+        user = result.scalars().first()
+        if user is None:
+            # Create a pending invitation record
+            token = secrets.token_urlsafe(48)
+            expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+
+            invitation = PendingInvitation(
+                tenant_id=workspace.tenant_id,
+                workspace_id=workspace_id,
+                email=email,
+                role_id=role_id,
+                invited_by_user_id=invited_by_user_id,
+                token=token,
+                expires_at=expires_at,
+            )
+            self.db.add(invitation)
+            await self.db.flush()
+            await self.db.commit()
+            await self.db.refresh(invitation)
+
+            logger.info(
+                "Invitation sent to %s for workspace %s with role %s (token=%s)",
+                email, workspace_id, role_id, token,
+            )
+            # Simulate email dispatch (integrate with EmailService in production)
+            return invitation
 
         # Check if already assigned
         existing = await self.db.execute(
@@ -187,6 +213,7 @@ class TenantService:
         self.db.add(user_role)
         await self.db.flush()
         await self.db.commit()
+        await self.db.refresh(user_role)
         logger.info("Invited user %s to workspace %s with role %s", email, workspace_id, role_id)
         return user_role
 

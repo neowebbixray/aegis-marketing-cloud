@@ -1,22 +1,25 @@
 """
 SEO service: keyword tracking, rank tracking, site audit, backlink analysis.
 
-All operations are tenant-scoped. The service works with the existing
-Campaign, Funnel and other marketing models via JSONB data fields and
-dedicated service-level data structures.
+All operations are tenant-scoped. Uses the ``SeoKeyword`` SQLAlchemy model
+for persisting keyword data.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Optional
 from uuid import UUID
 
-from sqlalchemy import select, func, desc
+from fastapi import BackgroundTasks
+from sqlalchemy import Select, desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import ColumnElement
 
 from app.core.exceptions import NotFoundException, ValidationException
 from app.models.marketing import Campaign
+from app.models.seo import SeoKeyword
 from app.services.base import BaseService
 
 logger = logging.getLogger("amc.services.seo")
@@ -25,7 +28,7 @@ logger = logging.getLogger("amc.services.seo")
 class KeywordService(BaseService):
     """Track and manage SEO keywords with ranking positions."""
 
-    model = Campaign  # Reuse Campaign model; keywords stored via JSONB integration
+    model = SeoKeyword
 
     async def track_keyword(
         self,
@@ -41,23 +44,26 @@ class KeywordService(BaseService):
     ) -> dict[str, Any]:
         """Register a new keyword for tracking.
 
-        Keywords are stored in a dedicated keywords_data JSONB structure
-        within the tenant's campaign/SEO workspace.
+        Persists the keyword to the ``seo_keywords`` table and returns the
+        created record as a dictionary.
         """
-        # Stub: in production this persists to a keywords table or JSONB
-        keyword_record = {
-            "keyword": keyword,
-            "target_url": target_url,
-            "search_engine": search_engine,
-            "location": location,
-            "language": language,
-            "tags": tags or [],
-            "tenant_id": str(tenant_id),
-            "workspace_id": str(workspace_id),
-        }
-        logger.info("Tracking keyword '%s' for tenant %s", keyword, tenant_id)
-        # TODO: persist to dedicated seo_keywords table
-        return keyword_record
+        obj = await self.create(
+            tenant_id=tenant_id,
+            workspace_id=workspace_id,
+            keyword=keyword,
+            target_url=target_url,
+            search_engine=search_engine,
+            location=location,
+            language=language,
+            tags=tags or [],
+        )
+
+        logger.info(
+            "Tracking keyword '%s' for tenant %s (id=%s)",
+            keyword, tenant_id, obj.id,
+        )
+
+        return self._keyword_to_dict(obj)
 
     async def list_keywords(
         self,
@@ -73,15 +79,52 @@ class KeywordService(BaseService):
         """List tracked keywords with current ranking data.
 
         Returns paginated list of keyword records and total count.
+        Supports filtering by keyword text (substring match) and search engine.
         """
-        # Stub: queries dedicated seo_keywords table
-        items: list[dict[str, Any]] = []
-        total = 0
-        logger.debug(
-            "Listing keywords for workspace %s (skip=%d, limit=%d)",
-            workspace_id, skip, limit,
+        filters: list[ColumnElement] = [
+            SeoKeyword.workspace_id == workspace_id,
+        ]
+
+        if search:
+            filters.append(SeoKeyword.keyword.ilike(f"%{search}%"))
+        if search_engine:
+            filters.append(SeoKeyword.search_engine == search_engine)
+
+        # Build ordering column
+        sort_map: dict[str, Any] = {
+            "keyword": SeoKeyword.keyword,
+            "current_rank": SeoKeyword.current_rank,
+            "previous_rank": SeoKeyword.previous_rank,
+            "search_volume": SeoKeyword.search_volume,
+            "difficulty_score": SeoKeyword.difficulty_score,
+            "last_checked_at": SeoKeyword.last_checked_at,
+            "created_at": SeoKeyword.created_at,
+        }
+        order_col = sort_map.get(sort_by, SeoKeyword.keyword)
+        order_by: ColumnElement = desc(order_col) if sort_desc else order_col
+
+        items, total = await self.list(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            filters=filters,
+            order_by=order_by,
         )
-        return items, total
+
+        return [self._keyword_to_dict(k) for k in items], total
+
+    async def get_keyword(
+        self,
+        keyword_id: UUID,
+        tenant_id: UUID,
+    ) -> dict[str, Any]:
+        """Fetch a single keyword record by its primary key.
+
+        Raises ``NotFoundException`` if the keyword does not exist or is not
+        scoped to the given tenant.
+        """
+        obj = await self.get(id=keyword_id, tenant_id=tenant_id)
+        return self._keyword_to_dict(obj)
 
     async def get_keyword_rankings(
         self,
@@ -90,9 +133,50 @@ class KeywordService(BaseService):
         keyword_ids: list[UUID] | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        """Fetch current rankings for one or more keywords."""
-        # Stub: queries ranking_history table
-        return []
+        """Fetch current rankings for one or more keywords.
+
+        If *keyword_ids* is ``None``, returns rankings for the most recently
+        checked keywords in the workspace (up to *limit*).
+        """
+        stmt = select(SeoKeyword).where(
+            SeoKeyword.tenant_id == tenant_id,
+            SeoKeyword.workspace_id == workspace_id,
+        )
+
+        if keyword_ids:
+            stmt = stmt.where(SeoKeyword.id.in_(keyword_ids))
+
+        stmt = stmt.order_by(desc(SeoKeyword.last_checked_at)).limit(limit)
+
+        result = await self.db.execute(stmt)
+        rows = list(result.scalars().all())
+        return [self._keyword_to_dict(r) for r in rows]
+
+    # ── helpers ───────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _keyword_to_dict(obj: SeoKeyword) -> dict[str, Any]:
+        """Convert a ``SeoKeyword`` ORM instance to a plain dict."""
+        return {
+            "id": str(obj.id),
+            "tenant_id": str(obj.tenant_id),
+            "workspace_id": str(obj.workspace_id),
+            "keyword": obj.keyword,
+            "target_url": obj.target_url,
+            "search_engine": obj.search_engine,
+            "location": obj.location,
+            "language": obj.language,
+            "tags": obj.tags or [],
+            "current_rank": obj.current_rank,
+            "previous_rank": obj.previous_rank,
+            "search_volume": obj.search_volume,
+            "difficulty_score": obj.difficulty_score,
+            "last_checked_at": (
+                obj.last_checked_at.isoformat() if obj.last_checked_at else None
+            ),
+            "created_at": obj.created_at.isoformat() if obj.created_at else None,
+            "updated_at": obj.updated_at.isoformat() if obj.updated_at else None,
+        }
 
 
 class SiteAuditService(BaseService):
@@ -109,12 +193,18 @@ class SiteAuditService(BaseService):
         depth: int = 3,
         include_subdomains: bool = False,
         settings: dict[str, Any] | None = None,
+        background_tasks: BackgroundTasks | None = None,
     ) -> dict[str, Any]:
         """Initiate a site audit for the given URL.
 
         Creates an audit record and dispatches a background task to
         crawl the site and collect SEO metrics.
+
+        When *background_tasks* is provided (e.g. from a FastAPI route), a
+        simulated crawl coroutine is enqueued via ``BackgroundTasks``.
         """
+        audit_id = None  # placeholder — will come from a persisted model
+
         audit_record = {
             "url": url,
             "name": name or url,
@@ -125,9 +215,52 @@ class SiteAuditService(BaseService):
             "tenant_id": str(tenant_id),
             "workspace_id": str(workspace_id),
         }
-        logger.info("Initiating site audit for %s (depth=%d)", url, depth)
-        # TODO: dispatch async crawl task
+        logger.info(
+            "Initiating site audit for %s (depth=%d, workspace=%s)",
+            url, depth, workspace_id,
+        )
+
+        # Dispatch background crawl simulation if a task queue is provided
+        if background_tasks is not None:
+            background_tasks.add_task(
+                self._simulate_crawl,
+                audit_id=audit_id,
+                url=url,
+                depth=depth,
+                workspace_id=workspace_id,
+            )
+            logger.debug(
+                "Dispatched simulated crawl for audit %s (url=%s)",
+                audit_id, url,
+            )
+        else:
+            logger.debug(
+                "No background_tasks provided — crawl simulation skipped for %s", url,
+            )
+
         return audit_record
+
+    async def _simulate_crawl(
+        self,
+        audit_id: UUID | None,
+        url: str,
+        depth: int,
+        workspace_id: UUID,
+    ) -> None:
+        """Simulated crawl step (placeholder for real crawler integration).
+
+        In production this would invoke a Celery task, an external crawler
+        API, or a subprocess running a headless browser.
+        """
+        logger.info(
+            "[SIMULATED CRAWL] audit=%s url=%s depth=%d workspace=%s — starting",
+            audit_id, url, depth, workspace_id,
+        )
+        await asyncio.sleep(2)  # pretend we're doing work
+        logger.info(
+            "[SIMULATED CRAWL] audit=%s url=%s — complete",
+            audit_id, url,
+        )
 
     async def list_audits(
         self,

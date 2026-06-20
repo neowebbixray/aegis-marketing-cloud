@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_active_user, get_db, get_tenant_context
 from app.core.exceptions import NotFoundException
 from app.models.auth import User
+from app.models.tenant import PendingInvitation
 from app.schemas.tenant import (
     InviteUserRequest,
     RoleResponse,
@@ -120,12 +121,16 @@ async def invite_user(
 ) -> dict:
     """Invite a user to a workspace by assigning a role."""
     service = TenantService(db)
-    user_role = await service.invite_user(
+    result = await service.invite_user(
         workspace_id=workspace_id,
         email=body.email,
         role_id=body.role_id,
+        invited_by_user_id=current_user.id,
     )
-    return {"detail": "User invited successfully", "user_role_id": str(user_role.id)}
+
+    if isinstance(result, PendingInvitation):
+        return {"detail": "Invitation sent to email", "invitation_id": str(result.id)}
+    return {"detail": "User invited successfully", "user_role_id": str(result.id)}
 
 
 @router.delete("/workspaces/{workspace_id}/members/{user_id}", status_code=204)

@@ -9,7 +9,7 @@ import hashlib
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -159,8 +159,24 @@ class AuthService:
 
         # Check MFA
         if user.mfa_devices:
-            # TODO: Return a session token / MFA challenge instead of full auth
-            raise ForbiddenException(detail="MFA challenge required")
+            # Generate a short-lived MFA challenge token
+            challenge_id = uuid4()
+            mfa_token = create_access_token(
+                subject=str(user.id),
+                extra_claims={
+                    "type": "mfa_challenge",
+                    "challenge_id": str(challenge_id),
+                },
+                expires_delta=timedelta(minutes=5),
+            )
+            logger.info(
+                "MFA challenge %s issued for user %s", challenge_id, user.id
+            )
+            return {
+                "mfa_required": True,
+                "mfa_token": mfa_token,
+                "challenge_id": str(challenge_id),
+            }
 
         # Update last_login
         user.last_login_at = datetime.now(timezone.utc)

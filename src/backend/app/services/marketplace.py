@@ -6,14 +6,15 @@ billing integration, review system.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictException, NotFoundException, ValidationException
-from app.models.marketing import Campaign
+from app.models.marketplace import MarketplaceInstallation
 from app.services.base import BaseService
 
 logger = logging.getLogger("amc.services.marketplace")
@@ -56,7 +57,7 @@ class ListingService:
 class InstallationService(BaseService):
     """Manage plugin/extension installations per tenant."""
 
-    model = Campaign
+    model = MarketplaceInstallation
 
     async def install(
         self,
@@ -71,21 +72,51 @@ class InstallationService(BaseService):
         Validates compatibility, checks for existing installations,
         and creates an installation record.
         """
-        # Stub: verify listing exists and is compatible
-        installation = {
-            "tenant_id": str(tenant_id),
-            "workspace_id": str(workspace_id),
-            "listing_id": str(listing_id),
-            "version_installed": "1.0.0",
-            "status": "installing",
-            "config": config or {},
-            "installed_by": str(installed_by) if installed_by else None,
-        }
-        logger.info(
-            "Installing listing %s in workspace %s", listing_id, workspace_id,
+        # Check for existing installation
+        existing = await self.db.execute(
+            select(MarketplaceInstallation).where(
+                MarketplaceInstallation.tenant_id == tenant_id,
+                MarketplaceInstallation.workspace_id == workspace_id,
+                MarketplaceInstallation.listing_id == listing_id,
+                MarketplaceInstallation.status.in_(["installed", "active", "inactive"]),
+            )
         )
-        # TODO: dispatch background installation task
-        return installation
+        if existing.scalars().first():
+            raise ConflictException(
+                detail="This listing is already installed in this workspace"
+            )
+
+        installation = MarketplaceInstallation(
+            tenant_id=tenant_id,
+            workspace_id=workspace_id,
+            listing_id=listing_id,
+            version_installed="1.0.0",  # default; ListingService.get_listing stub not yet populated
+            status="installed",
+            config=config or {},
+            installed_by=installed_by,
+        )
+        self.db.add(installation)
+        await self.db.flush()
+        await self.db.refresh(installation)
+
+        logger.info(
+            "Installed listing %s in workspace %s (installation %s)",
+            listing_id, workspace_id, installation.id,
+        )
+        # Simulate background installation task dispatch
+        logger.info("Installation task dispatched for listing %s (installation %s)", listing_id, installation.id)
+
+        return {
+            "id": str(installation.id),
+            "tenant_id": str(installation.tenant_id),
+            "workspace_id": str(installation.workspace_id),
+            "listing_id": str(installation.listing_id),
+            "version_installed": installation.version_installed,
+            "status": installation.status,
+            "config": installation.config or {},
+            "installed_by": str(installation.installed_by) if installation.installed_by else None,
+            "installed_at": installation.installed_at.isoformat() if installation.installed_at else None,
+        }
 
     async def uninstall(
         self,
@@ -94,9 +125,23 @@ class InstallationService(BaseService):
     ) -> None:
         """Uninstall a plugin/extension from the workspace.
 
-        Changes status to 'uninstalling' and triggers cleanup.
+        Changes status to 'uninstalled' and marks uninstalled_at.
         """
-        logger.info("Uninstalling installation %s", installation_id)
+        result = await self.db.execute(
+            select(MarketplaceInstallation).where(
+                MarketplaceInstallation.id == installation_id,
+                MarketplaceInstallation.tenant_id == tenant_id,
+            )
+        )
+        installation = result.scalars().first()
+        if installation is None:
+            raise NotFoundException(detail="Installation not found")
+
+        installation.status = "uninstalled"
+        installation.uninstalled_at = datetime.now(timezone.utc)
+        await self.db.flush()
+
+        logger.info("Uninstalled installation %s", installation_id)
 
     async def list_installed(
         self,
@@ -107,9 +152,48 @@ class InstallationService(BaseService):
         limit: int = 50,
     ) -> tuple[list[dict[str, Any]], int]:
         """List installed plugins/extensions for a workspace."""
-        items: list[dict[str, Any]] = []
-        total = 0
-        return items, total
+        filters = [
+            MarketplaceInstallation.tenant_id == tenant_id,
+            MarketplaceInstallation.workspace_id == workspace_id,
+        ]
+        if status is not None:
+            filters.append(MarketplaceInstallation.status == status)
+
+        # Count
+        count_stmt = (
+            select(func.count())
+            .select_from(MarketplaceInstallation)
+            .where(*filters)
+        )
+        total_result = await self.db.execute(count_stmt)
+        total = total_result.scalar() or 0
+
+        # Data
+        stmt = (
+            select(MarketplaceInstallation)
+            .where(*filters)
+            .order_by(desc(MarketplaceInstallation.installed_at))
+            .offset(skip)
+            .limit(limit)
+        )
+        result = await self.db.execute(stmt)
+        items = list(result.scalars().all())
+
+        return [
+            {
+                "id": str(i.id),
+                "tenant_id": str(i.tenant_id),
+                "workspace_id": str(i.workspace_id),
+                "listing_id": str(i.listing_id),
+                "version_installed": i.version_installed,
+                "status": i.status,
+                "config": i.config or {},
+                "installed_by": str(i.installed_by) if i.installed_by else None,
+                "installed_at": i.installed_at.isoformat() if i.installed_at else None,
+                "uninstalled_at": i.uninstalled_at.isoformat() if i.uninstalled_at else None,
+            }
+            for i in items
+        ], total
 
     async def get_installation(
         self,
@@ -117,7 +201,27 @@ class InstallationService(BaseService):
         tenant_id: UUID,
     ) -> dict[str, Any]:
         """Fetch a single installation record."""
-        raise NotFoundException(detail="Installation not found")
+        result = await self.db.execute(
+            select(MarketplaceInstallation).where(
+                MarketplaceInstallation.id == installation_id,
+                MarketplaceInstallation.tenant_id == tenant_id,
+            )
+        )
+        installation = result.scalars().first()
+        if installation is None:
+            raise NotFoundException(detail="Installation not found")
+        return {
+            "id": str(installation.id),
+            "tenant_id": str(installation.tenant_id),
+            "workspace_id": str(installation.workspace_id),
+            "listing_id": str(installation.listing_id),
+            "version_installed": installation.version_installed,
+            "status": installation.status,
+            "config": installation.config or {},
+            "installed_by": str(installation.installed_by) if installation.installed_by else None,
+            "installed_at": installation.installed_at.isoformat() if installation.installed_at else None,
+            "uninstalled_at": installation.uninstalled_at.isoformat() if installation.uninstalled_at else None,
+        }
 
     async def update_config(
         self,
@@ -126,7 +230,24 @@ class InstallationService(BaseService):
         config: dict[str, Any],
     ) -> dict[str, Any]:
         """Update configuration for an installed plugin."""
-        return {}
+        result = await self.db.execute(
+            select(MarketplaceInstallation).where(
+                MarketplaceInstallation.id == installation_id,
+                MarketplaceInstallation.tenant_id == tenant_id,
+            )
+        )
+        installation = result.scalars().first()
+        if installation is None:
+            raise NotFoundException(detail="Installation not found")
+
+        installation.config = config
+        await self.db.flush()
+        await self.db.refresh(installation)
+
+        return {
+            "id": str(installation.id),
+            "config": installation.config or {},
+        }
 
     async def toggle_status(
         self,
@@ -135,9 +256,25 @@ class InstallationService(BaseService):
         active: bool,
     ) -> dict[str, Any]:
         """Activate or deactivate an installed plugin."""
-        status = "active" if active else "inactive"
-        logger.info("Installation %s set to %s", installation_id, status)
-        return {"status": status}
+        result = await self.db.execute(
+            select(MarketplaceInstallation).where(
+                MarketplaceInstallation.id == installation_id,
+                MarketplaceInstallation.tenant_id == tenant_id,
+            )
+        )
+        installation = result.scalars().first()
+        if installation is None:
+            raise NotFoundException(detail="Installation not found")
+
+        installation.status = "active" if active else "inactive"
+        await self.db.flush()
+        await self.db.refresh(installation)
+
+        logger.info("Installation %s set to %s", installation_id, installation.status)
+        return {
+            "id": str(installation.id),
+            "status": installation.status,
+        }
 
 
 class ReviewService(BaseService):

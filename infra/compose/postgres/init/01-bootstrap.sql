@@ -13,4 +13,4 @@ CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
 CREATE EXTENSION IF NOT EXISTS "ltree";
 
 -- Vector extension for AI embeddings (optional, can use Qdrant instead)
-CREATE EXTENSION IF NOT EXISTS "vector";
+-- CREATE EXTENSION IF NOT EXISTS "vector"; -- vector extension disabled for CI

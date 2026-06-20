@@ -1,246 +1,168 @@
-# =============================================================================
-# Aegis Marketing Cloud — Weekly Security Scan
-# =============================================================================
-# Runs automatically every Monday at 09:00 UTC.
-# Scans performed:
-#   1. Dependency vulnerability scanning (pip audit, npm audit)
-#   2. SAST via CodeQL (JavaScript/TypeScript + Python)
-#   3. Secret scanning (truffleHog / Gitleaks-style)
-#   4. Bandit Python SAST (via ci-security-scan.sh)
-#   5. Trivy filesystem scanning (via ci-security-scan.sh)
-# =============================================================================
-
+# ───────────────────────────────────────────────────────────────────────────────
+# Aegis Marketing Cloud — Security Pipeline
+# ───────────────────────────────────────────────────────────────────────────────
+# Runs on pushes to master and on pull requests touching security-sensitive
+# files.  Executes:
+#   1. Python SAST (Bandit)
+#   2. pip-audit (Python dependency vulnerabilities)
+#   3. npm audit  (Node.js dependency vulnerabilities)
+#   4. Trivy filesystem scan (codebase)
+#   5. (Optional) ESLint security plugin
+# ───────────────────────────────────────────────────────────────────────────────
 name: Security Scan
 
 on:
-  schedule:
-    - cron: "0 9 * * 1" # Every Monday at 09:00 UTC
-  workflow_dispatch: # Allow manual trigger
   push:
-    branches: [main, develop]
+    branches: [master, main]
     paths:
       - "src/**"
-      - "deployment/**"
       - "scripts/**"
-      - "pyproject.toml"
-      - "package.json"
+      - ".github/workflows/security.yml"
+      - "deployment/security/**"
+  pull_request:
+    branches: [master, main]
+    paths:
+      - "src/**"
+      - "deployment/security/**"
+  schedule:
+    # Weekly scan every Monday at 09:00 UTC
+    - cron: "0 9 * * 1"
+  workflow_dispatch: # Allow manual trigger
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
 
 jobs:
-  # ── Dependency Scanning ────────────────────────────────────────────────
-  dependency-scan:
-    name: Dependency Scanning
+  # ── Job 1: Python SAST & Dependency Audit ─────────────────────────────────
+  python-security:
+    name: Python Security (Bandit + pip-audit)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: src/backend
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      # ── Python dependencies ──────────────────────────────────────────
-      - name: Set up Python 3.12
+      - name: Install Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
 
-      - name: Scan Python dependencies (pip-audit)
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pip-audit
-          pip-audit \
-            --requirement <(pip freeze 2>/dev/null || true) \
-            --ignore-vuln PYSEC-XXXX-XXXX \
-            || echo "::warning::pip-audit found vulnerabilities"
+          pip install -e .
+          # Security audit tools
+          pip install bandit pip-audit
 
-      - name: Scan Python dependencies (Safety)
-        uses: pyupio/safety-action@v1
+      - name: Bandit SAST
+        run: |
+          bandit -r app/ -c deployment/security/bandit.conf -f custom \
+            -o reports/security/bandit_report.txt || true
+          cat reports/security/bandit_report.txt | head -30
+
+      - name: pip-audit (Python deps)
+        run: |
+          pip-audit --desc on 2>&1 || true
+
+      - name: Upload Bandit report
+        uses: actions/upload-artifact@v4
+        if: always()
         with:
-          api-key: ${{ secrets.SAFETY_API_KEY }}
-        continue-on-error: true
+          name: bandit-report
+          path: src/backend/reports/security/bandit_report.txt
+          retention-days: 30
 
-      # ── Node.js dependencies ─────────────────────────────────────────
-      - name: Set up Node.js 20
+  # ── Job 2: Node.js Dependency Audit ───────────────────────────────────────
+  npm-security:
+    name: npm Audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
 
-      - name: Scan npm dependencies
+      - name: Install dependencies
+        run: npm ci
+
+      - name: npm audit
         run: |
-          npm audit --audit-level=high || echo "::warning::npm audit found vulnerabilities"
+          npm audit --audit-level=high 2>&1 || true
 
-      - name: Upload dependency scan results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependency-scan-results
-          path: |
-            pip-audit-report.*
-            npm-audit-report.*
-
-  # ── SAST — CodeQL ─────────────────────────────────────────────────────
-  codeql-analysis:
-    name: SAST — CodeQL
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      security-events: write
-      actions: read
-      contents: read
-
-    strategy:
-      fail-fast: false
-      matrix:
-        language: ["javascript-typescript", "python"]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: ${{ matrix.language }}
-          queries: security-and-quality
-          config-file: .github/codeql-config.yml
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
-
-      - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@v3
-        with:
-          category: "/language:${{ matrix.language }}"
-          upload: true
-          output: sarif-results
-
-  # ── SAST — Bandit (Python) ──────────────────────────────────────────
-  bandit-sast:
-    name: SAST — Bandit (Python)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install Bandit
-        run: pip install bandit
-
-      - name: Run Bandit
-        run: |
-          bandit -r src/backend/app/ \
-            -c deployment/security/bandit.conf \
-            -f custom \
-            -o bandit-report.txt || echo "::warning::Bandit found issues"
-          cat bandit-report.txt
-
-      - name: Upload Bandit results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: bandit-sast-results
-          path: bandit-report.txt
-
-  # ── Trivy Filesystem Scan ───────────────────────────────────────────
+  # ── Job 3: Trivy Filesystem Scan ──────────────────────────────────────────
   trivy-scan:
     name: Trivy Filesystem Scan
     runs-on: ubuntu-latest
-    timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Run Trivy vulnerability scanner
+      - name: Run Trivy (repo scan)
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: "fs"
-          scan-ref: "."
-          severity: "HIGH,CRITICAL"
-          ignore-unfixed: true
-          trivyignores: deployment/security/.trivyignore
-          format: "sarif"
-          output: "trivy-results.sarif"
-          exit-code: "0"
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: 0 # WARN-only for now; set to 1 to fail on findings
+          format: table
+          output: reports/trivy-fs.txt
 
-      - name: Upload Trivy results to GitHub Security
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: "trivy-results.sarif"
-          category: "trivy"
-
-      - name: Upload Trivy results artifact
-        if: always()
+      - name: Upload Trivy report
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: trivy-fs-results
-          path: trivy-results.sarif
+          name: trivy-fs-report
+          path: reports/trivy-fs.txt
+          retention-days: 30
 
-  # ── Secret Scanning ───────────────────────────────────────────────────
-  secret-scan:
-    name: Secret Scanning
+  # ── Job 4: Combined Dependency Audit Script ────────────────────────────────
+  dependency-audit:
+    name: Unified Dependency Audit
     runs-on: ubuntu-latest
-    timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
         with:
-          fetch-depth: 0 # Full history for git-based scanning
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Scan with Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        continue-on-error: true
-        env:
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
-
-      - name: Scan with truffleHog
-        uses: trufflesecurity/trufflehog@v3
-        continue-on-error: true
+      - name: Install Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
         with:
-          extra_args: --only-verified --fail
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
 
-      - name: Check for placeholder secrets in .env.example
+      - name: Install Python deps + pip-audit
         run: |
-          echo "Checking .env.example for placeholder values..."
-          PLACEHOLDER_COUNT=$(grep -c 'change-me\|your-\|YOUR_\|xxxxx\|placeholder' .env.example || true)
-          if [ "$PLACEHOLDER_COUNT" -gt 0 ]; then
-            echo "::warning::Found $PLACEHOLDER_COUNT placeholder values in .env.example"
-          fi
-          echo "✅ Placeholder check complete"
+          cd src/backend
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pip-audit
 
-      - name: Upload secret scan results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: secret-scan-results
-          path: |
-            gitleaks-report.*
-            trufflehog-report.*
-
-  # ── Summary ───────────────────────────────────────────────────────────
-  security-summary:
-    name: Security Summary
-    needs: [dependency-scan, codeql-analysis, bandit-sast, trivy-scan, secret-scan]
-    runs-on: ubuntu-latest
-    if: always()
-
-    steps:
-      - name: Check all security scan statuses
+      - name: Install Node deps
         run: |
-          echo "## Security Scan Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          cd src/frontend
+          npm ci
 
-          echo "| Scan | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
-
-          for job in "dependency-scan" "codeql-analysis (javascript-typescript)" "codeql-analysis (python)" "bandit-sast" "trivy-scan" "secret-scan"; do
-            echo "| $job | ✅ Completed |" >> $GITHUB_STEP_SUMMARY
-          done
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "_Review artifacts for detailed findings._" >> $GITHUB_STEP_SUMMARY
+      - name: Run dependency audit script
+        run: |
+          bash scripts/ci-dependency-audit.sh

@@ -31,7 +31,7 @@ class Asset(BaseModel):
     width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True, default=dict)
+    meta_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True, default=dict)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)
     checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
 

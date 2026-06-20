@@ -1,0 +1,14 @@
+replicaCount: 1
+
+image:
+  repository: your-registry/aegis-backend
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+resources: {}
+
+env: []

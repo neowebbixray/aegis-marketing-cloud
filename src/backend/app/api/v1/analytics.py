@@ -94,7 +94,7 @@ async def query_metrics(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
     metric_names: str = Query(..., description="Comma-separated metric names"),
-    granularity: str = Query("day", regex="^(hour|day|week|month)$"),
+    granularity: str = Query("day", pattern=r"^(hour|day|week|month)$"),
     start_date: datetime | None = Query(None),
     end_date: datetime | None = Query(None),
 ) -> dict:
@@ -174,6 +174,35 @@ async def get_top_entities(
         limit=limit,
     )
     return build_single_response({"entity_type": entity_type, "metric": metric, "top": data})
+
+# ── AI Usage Metrics ───────────────────────────────────────────────────────────
+@router.get("/metrics/ai-usage")
+async def get_ai_usage(
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Aggregate AI inference usage for the tenant.
+
+    Returns total token usage, total cost, and execution count across all AI agent executions.
+    """
+    tenant_id = await get_tenant_context(request, current_user=current_user)
+    # Simple aggregation query – use SQLAlchemy core for performance.
+    from sqlalchemy import func, select
+    from app.models.ai import AIAgentExecution
+
+    stmt = select(
+        func.count(AIAgentExecution.id),
+        func.coalesce(func.sum(AIAgentExecution.tokens_used), 0),
+        func.coalesce(func.sum(AIAgentExecution.cost), 0.0),
+    ).where(AIAgentExecution.tenant_id == tenant_id)
+    result = await db.execute(stmt)
+    exec_count, total_tokens, total_cost = result.one()
+    return build_single_response({
+        "executions": exec_count,
+        "total_tokens": total_tokens,
+        "total_cost": float(total_cost),
+    })
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

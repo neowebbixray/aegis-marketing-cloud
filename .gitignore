@@ -12,8 +12,10 @@ build/
 *.sqlite3
 coverage/
 .coverage
+coverage.xml
 htmlcov/
 .pytest_cache/
+site/
 .mypy_cache/
 .ruff_cache/
 .history/

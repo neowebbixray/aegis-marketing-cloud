@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: backend
+        working-directory: src/backend
 
     steps:
       - uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/pyproject.toml
+          cache-dependency-path: src/backend/pyproject.toml
 
       - name: Install dependencies
         run: |
@@ -65,7 +65,7 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: frontend
+        working-directory: src/frontend
 
     steps:
       - uses: actions/checkout@v4
@@ -75,7 +75,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: src/frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -94,7 +94,7 @@ jobs:
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: backend
+        working-directory: src/backend
     services:
       postgres:
         image: postgres:16-alpine
@@ -150,7 +150,7 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
-          files: backend/coverage.xml
+          files: src/backend/coverage.xml
           flags: backend
           fail_ci_if_error: false
 
@@ -169,7 +169,7 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: frontend
+        working-directory: src/frontend
 
     steps:
       - uses: actions/checkout@v4
@@ -217,8 +217,8 @@ jobs:
       - name: Build backend image
         uses: docker/build-push-action@v5
         with:
-          context: backend
-          file: backend/Dockerfile
+          context: src/backend
+          file: src/backend/Dockerfile
           target: production
           load: true
           tags: ${{ env.REGISTRY }}/backend:${{ env.TAG }}
@@ -228,8 +228,8 @@ jobs:
       - name: Build frontend image
         uses: docker/build-push-action@v5
         with:
-          context: frontend
-          file: frontend/Dockerfile
+          context: src/frontend
+          file: src/frontend/Dockerfile
           target: production
           load: true
           tags: ${{ env.REGISTRY }}/frontend:${{ env.TAG }}

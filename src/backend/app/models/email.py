@@ -74,7 +74,7 @@ class EmailCampaign(BaseModel, SoftDeleteMixin):
         Integer, nullable=True
     )
     tracking_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    metadata: Mapped[dict[str, Any] | None] = mapped_column(
+    meta_data: Mapped[dict[str, Any] | None] = mapped_column(
         "metadata", JSONB, nullable=True, default=dict
     )
 
@@ -177,7 +177,7 @@ class EmailMessage(BaseModel):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Custom metadata
-    metadata: Mapped[dict[str, Any] | None] = mapped_column(
+    meta_data: Mapped[dict[str, Any] | None] = mapped_column(
         "metadata", JSONB, nullable=True, default=dict
     )
 

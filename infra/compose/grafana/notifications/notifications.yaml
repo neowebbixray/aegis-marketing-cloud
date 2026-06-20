@@ -1,0 +1,12 @@
+# Grafana notification channel for PagerDuty (provisioning)
+apiVersion: 1
+providers:
+  - name: "PagerDuty"
+    type: webhook
+    orgId: 1
+    isDefault: false
+    sendReminder: false
+    url: "https://events.pagerduty.com/v2/enqueue"
+    httpMethod: POST
+    httpHeader:
+      Content-Type: "application/json"

@@ -20,6 +20,53 @@ from app.config import settings
 from app.schemas.base import build_problem_response
 
 
+# ── Rate Limit Tier Helpers ──────────────────────────────────────────────────
+
+# In-memory cache of parsed tier config (refreshed at import time).
+_TIER_LIMITS: dict[str, tuple[int, int]] = {}  # tier_name -> (per_minute, per_hour)
+
+
+def _parse_tier_value(raw: str) -> tuple[int, int]:
+    """Parse a ``"requests_per_min:requests_per_hour"`` string.
+
+    ``0`` means *unlimited* for that window.
+    """
+    parts = raw.split(":", 1)
+    per_min = int(parts[0].strip()) if parts else 100
+    per_hour = int(parts[1].strip()) if len(parts) > 1 else 0
+    return per_min, per_hour
+
+
+def _load_tier_limits() -> dict[str, tuple[int, int]]:
+    """Read tier limits from ``settings``."""
+    return {
+        "free": _parse_tier_value(settings.rate_limit_tier_free),
+        "starter": _parse_tier_value(settings.rate_limit_tier_starter),
+        "professional": _parse_tier_value(settings.rate_limit_tier_professional),
+        "enterprise": _parse_tier_value(settings.rate_limit_tier_enterprise),
+    }
+
+
+_TIER_LIMITS = _load_tier_limits()
+
+
+def _resolve_rate_limits(identity: str) -> tuple[int, int]:
+    """Return ``(requests_per_min, requests_per_hour)`` for the given identity.
+
+    Tries to extract a tier suffix from the identity (e.g. ``identity:tier``).
+    If no tier suffix is found, returns the **free** tier limits.
+    """
+    if ":" in identity:
+        _identity, tier = identity.rsplit(":", 1)
+        tier = tier.lower()
+        if tier in _TIER_LIMITS:
+            return _TIER_LIMITS[tier]
+    # Fallback to the simple settings-based limit or free tier
+    per_min: int = settings.rate_limit_requests
+    per_hour: int = _TIER_LIMITS.get("free", (100, 1000))[1]
+    return per_min, per_hour
+
+
 # ── Request ID Middleware ────────────────────────────────────────────────────
 class RequestIDMiddleware(BaseHTTPMiddleware):
     """Ensure every request has an ``X-Request-ID`` header.
@@ -160,54 +207,86 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             else:
                 identity = "unknown"
 
-        # ── Build Redis key ───────────────────────────────────────────
-        key = f"rate_limit:{identity}:{request.url.path}"
+        # Check for a tier hint in the request header (e.g. X-RateLimit-Tier)
+        tier_hint = request.headers.get("X-RateLimit-Tier", "").lower()
+        if tier_hint in _TIER_LIMITS:
+            identity_with_tier = f"{identity}:{tier_hint}"
+        else:
+            identity_with_tier = identity
+
+        # ── Resolve limits for this identity ──────────────────────────
+        per_minute, per_hour = _resolve_rate_limits(identity_with_tier)
+
         now = time.time()
-        window = float(settings.rate_limit_window)
-        limit = float(settings.rate_limit_requests)
+        window_min = 60  # 1-minute window
+        window_hour = 3600  # 1-hour window
 
         # ── Atomic check-and-increment via Lua script ─────────────────
         try:
             r = await self._get_redis()
             script_hash = await self._load_script(r)
-            allowed, current_count, oldest_ts = await r.evalsha(
-                script_hash, 1, key, now, window, limit
+            path = request.url.path
+
+            # Check 1-minute window
+            key_min = f"rate_limit:{identity}:{path}:min"
+            allowed_min, count_min, oldest_min = await r.evalsha(
+                script_hash, 1, key_min, float(now), float(window_min), float(per_minute)
             )
-            allowed = bool(allowed)
-            current_count = int(current_count)
-            oldest_ts = float(oldest_ts)
+            allowed_min = bool(allowed_min)
+            count_min = int(count_min)
+
+            # Check 1-hour window (skip if per_hour is 0 = unlimited)
+            allowed_hour = True
+            count_hour = 0
+            if per_hour > 0:
+                key_hour = f"rate_limit:{identity}:{path}:hour"
+                allowed_hour, count_hour, _oldest_hour = await r.evalsha(
+                    script_hash, 1, key_hour, float(now), float(window_hour), float(per_hour)
+                )
+                allowed_hour = bool(allowed_hour)
+                count_hour = int(count_hour)
+
         except Exception:
             # Degrade gracefully — if Redis is unavailable let the
             # request through rather than blocking all traffic.
             return await call_next(request)
 
         # ── Rate limit exceeded → 429 ─────────────────────────────────
-        if not allowed:
-            retry_after = max(1, int(oldest_ts + window - now + 0.5))
+        if not allowed_min or not allowed_hour:
+            # Calculate the shortest retry-after from both windows
+            if not allowed_min:
+                retry_after = max(1, int(float(oldest_min) + window_min - now + 0.5))
+            else:
+                retry_after = max(1, int(window_hour))
+
             response = build_problem_response(
                 status_code=HTTP_429_TOO_MANY_REQUESTS,
                 title="Rate Limit Exceeded",
                 detail=f"Too many requests. Try again in {retry_after} second(s).",
                 request=request,
             )
-            # Ensure response is a Response object (for header manipulation)
+            # Determine which limit was hit
+            limit_exceeded = per_minute if not allowed_min else per_hour
             response.headers["Retry-After"] = str(retry_after)
-            response.headers["X-RateLimit-Limit"] = str(settings.rate_limit_requests)
+            response.headers["X-RateLimit-Limit"] = str(limit_exceeded)
             response.headers["X-RateLimit-Remaining"] = "0"
             response.headers["X-RateLimit-Reset"] = str(int(now + retry_after))
+            response.headers["X-RateLimit-Tier"] = tier_hint if tier_hint else "free"
             return response
 
         # ── Within limit → forward request ───────────────────────────
         response = await call_next(request)
 
         # Attach rate-limit headers to the real response
-        response.headers["X-RateLimit-Limit"] = str(settings.rate_limit_requests)
-        response.headers["X-RateLimit-Remaining"] = str(
-            max(0, settings.rate_limit_requests - current_count)
-        )
-        response.headers["X-RateLimit-Reset"] = str(
-            int(now + settings.rate_limit_window)
-        )
+        remaining = max(0, per_minute - count_min)
+        response.headers["X-RateLimit-Limit"] = str(per_minute)
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
+        response.headers["X-RateLimit-Reset"] = str(int(now + window_min))
+        response.headers["X-RateLimit-Hour-Limit"] = str(per_hour)
+        response.headers["X-RateLimit-Hour-Remaining"] = str(
+            max(0, per_hour - count_hour)
+        ) if per_hour > 0 else "unlimited"
+        response.headers["X-RateLimit-Tier"] = tier_hint if tier_hint else "free"
 
         return response
 

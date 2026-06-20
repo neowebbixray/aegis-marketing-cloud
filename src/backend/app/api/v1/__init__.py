@@ -15,6 +15,7 @@ from app.api.v1 import (
     crm,
     email,
     health,
+    knowledge,
     knowledge_base,
     marketplace,
     media,
@@ -25,6 +26,7 @@ from app.api.v1 import (
     tenants,
     webhooks,
     ws,
+    gdpr,
 )
 
 router = APIRouter(prefix="/api/v1")
@@ -37,6 +39,7 @@ router.include_router(crm.router)
 router.include_router(seo.router)
 router.include_router(social.router)
 router.include_router(analytics.router)
+router.include_router(knowledge.router)
 router.include_router(knowledge_base.router)
 router.include_router(notifications.router)
 router.include_router(marketplace.router)
@@ -46,3 +49,4 @@ router.include_router(email.router)
 router.include_router(health.router)
 router.include_router(ws.router)
 router.include_router(search.router)
+router.include_router(gdpr.router)

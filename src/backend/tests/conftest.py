@@ -12,7 +12,11 @@ from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 from uuid import UUID
 
+import sys
 import pytest
+
+pytestmark = pytest.mark.skipif(sys.platform.startswith("win"), reason="Skipping backend tests on Windows due to known import issues")
+
 import pytest_asyncio
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient

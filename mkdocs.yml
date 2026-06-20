@@ -1,0 +1,38 @@
+# mkdocs.yml – static documentation site for Aegis Marketing Cloud
+site_name: Aegis Marketing Cloud
+site_description: AI‑Native Digital Marketing Operating System – enterprise documentation
+site_url: https://example.com  # update when hosted
+repo_url: https://github.com/nousresearch/aegis-marketing-cloud
+repo_name: aegis-marketing-cloud
+# Use the existing ./docs folder as source
+docs_dir: docs
+site_dir: site
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+  features:
+    - navigation.tabs
+    - navigation.top
+markdown_extensions:
+  - admonition
+  - footnotes
+  - codehilite
+  - tables
+  - toc:
+      permalink: true
+nav:
+  - Home: index.md
+  - "Quick‑Start": quick-start.md
+  - "Documentation":
+      - "System Architecture": volume-4/01-system-architecture.md
+      - "API Specification": volume-6/01-api-specification.md
+      - "AI Architecture": volume-8/01-ai-architecture.md
+      - "Workflow Automation": volume-9/01-workflow-automation.md

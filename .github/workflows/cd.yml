@@ -63,8 +63,8 @@ jobs:
       - name: Build & push backend
         uses: docker/build-push-action@v5
         with:
-          context: backend
-          file: backend/Dockerfile
+          context: src/backend
+          file: src/backend/Dockerfile
           target: production
           push: true
           tags: ${{ steps.meta-backend.outputs.tags }}
@@ -85,8 +85,8 @@ jobs:
       - name: Build & push frontend
         uses: docker/build-push-action@v5
         with:
-          context: frontend
-          file: frontend/Dockerfile
+          context: src/frontend
+          file: src/frontend/Dockerfile
           target: production
           push: true
           tags: ${{ steps.meta-frontend.outputs.tags }}
@@ -124,9 +124,10 @@ jobs:
           ssh -o StrictHostKeyChecking=accept-new \
             "${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}" \
             "cd /opt/aegis-marketing-cloud && \
-             docker compose pull && \
-             docker compose up -d --remove-orphans && \
-             docker system prune -af --volumes"
+             docker compose -f deployment/docker-compose.yml pull && \
+             docker compose -f deployment/docker-compose.yml up -d --remove-orphans && \
+             docker compose -f deployment/docker-compose.yml exec -T backend alembic upgrade head && \
+             docker system prune -af"
 
       - name: Verify health endpoint
         run: |
@@ -157,7 +158,7 @@ jobs:
 
       - name: Run integration tests
         run: |
-          pytest backend/app/tests/integration/ \
+          pytest src/backend/app/tests/integration/ \
             -v \
             --junitxml=integration-results.xml \
             -x
@@ -197,9 +198,10 @@ jobs:
           ssh -o StrictHostKeyChecking=accept-new \
             "${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }}" \
             "cd /opt/aegis-marketing-cloud && \
-             docker compose pull && \
-             docker compose up -d --remove-orphans && \
-             docker system prune -af --volumes"
+             docker compose -f deployment/docker-compose.yml pull && \
+             docker compose -f deployment/docker-compose.yml up -d --remove-orphans && \
+             docker compose -f deployment/docker-compose.yml exec -T backend alembic upgrade head && \
+             docker system prune -af"
 
       - name: Verify production health
         run: |

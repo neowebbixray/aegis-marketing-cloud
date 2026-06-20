@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aegis-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aegis-backend
+  template:
+    metadata:
+      labels:
+        app: aegis-backend
+    spec:
+      containers:
+        - name: backend
+          image: "your-registry/aegis-backend:latest"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: ENVIRONMENT
+              value: "production"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5

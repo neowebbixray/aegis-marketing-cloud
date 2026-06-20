@@ -98,6 +98,51 @@ class Settings(BaseSettings):
     rate_limit_requests: int = Field(default=100, alias="RATE_LIMIT_REQUESTS")
     rate_limit_window: int = Field(default=60, alias="RATE_LIMIT_WINDOW")  # seconds
 
+    # ── Rate Limit Tiers (production defaults) ─────────────────────────────────
+    # Each tier defines (requests_per_minute, requests_per_hour).
+    # Override individual tiers via env vars.
+    rate_limit_tier_free: str = Field(
+        default="100:1000",
+        alias="RATE_LIMIT_TIER_FREE",
+        description="Free tier: requests/min:requests/hour",
+    )
+    rate_limit_tier_starter: str = Field(
+        default="500:5000",
+        alias="RATE_LIMIT_TIER_STARTER",
+        description="Starter tier: requests/min:requests/hour",
+    )
+    rate_limit_tier_professional: str = Field(
+        default="2000:20000",
+        alias="RATE_LIMIT_TIER_PROFESSIONAL",
+        description="Professional tier: requests/min:requests/hour",
+    )
+    rate_limit_tier_enterprise: str = Field(
+        default="10000:0",
+        alias="RATE_LIMIT_TIER_ENTERPRISE",
+        description="Enterprise tier: requests/min:requests/hour (0 = unlimited)",
+    )
+
+    # ── CSP Headers ────────────────────────────────────────────────────────────
+    csp_enabled: bool = Field(
+        default=True,
+        alias="CSP_ENABLED",
+        description="Enable Content-Security-Policy middleware",
+    )
+    csp_report_only: bool = Field(
+        default=False,
+        alias="CSP_REPORT_ONLY",
+        description="Use Content-Security-Policy-Report-Only instead of enforcement",
+    )
+    csp_directives: dict[str, str] | None = Field(
+        default=None,
+        alias="CSP_DIRECTIVES",
+        description=(
+            "Full CSP directives dict override. If set, individual CSP_* env "
+            "vars are ignored. Format: JSON object, e.g. "
+            '{"default-src": "''self''", "script-src": "''self''"}'
+        ),
+    )
+
     # ── SSO / OAuth ────────────────────────────────────────────────────────────
     sso_redirect_uri: str = Field(
         default="http://localhost:8000/api/v1/auth/sso/callback",

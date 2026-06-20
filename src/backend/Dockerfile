@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy dependency metadata first for layer caching
-COPY pyproject.toml README.md ./
+COPY pyproject.toml ./
 
 # Install project in editable mode
 RUN pip install --no-cache-dir -e ".[dev]"

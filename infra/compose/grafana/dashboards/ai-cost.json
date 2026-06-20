@@ -1,0 +1,39 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "AI Cost & Usage",
+    "tags": [],
+    "timezone": "browser",
+    "schemaVersion": 30,
+    "Version": 1,
+    "panels": [
+      {
+        "type": "stat",
+        "title": "Total AI Cost",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "sum(ai_inference_duration_seconds) * 0.00002",
+            "format": "time_series",
+            "legendFormat": "Cost"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+      },
+      {
+        "type": "stat",
+        "title": "Total Tokens Used",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "sum(ai_inference_duration_seconds)",
+            "format": "time_series",
+            "legendFormat": "Tokens"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}
+      }
+    ]
+  },
+  "overwrite": true
+}

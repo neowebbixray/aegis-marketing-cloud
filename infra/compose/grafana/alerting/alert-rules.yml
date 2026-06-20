@@ -1,0 +1,69 @@
+# Grafana Alert Rules (provisioning)
+# This file defines alert groups for the AMC monitoring stack.
+# It is mounted into the Grafana container at /etc/grafana/provisioning/alerting.
+# Grafana will automatically load any YAML files in that directory.
+
+groups:
+  - name: amc-service-health
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(amc_http_requests_total{status=~"5.."}[5m]))
+          /
+          sum(rate(amc_http_requests_total[5m])) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Error rate > 1% for 5 minutes"
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.99, rate(amc_http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P99 latency > 2s"
+
+      - alert: DatabaseConnectionExhausted
+        expr: amc_db_connections_active{pool_name="primary"} > 80
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection pool near exhaustion"
+
+      - alert: AICostAnomaly
+        expr: |
+          rate(amc_ai_inference_cost_total_usd[1h]) > 50
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AI inference cost > $50/hour"
+
+      - alert: CampaignDispatchFailure
+        expr: |
+          rate(amc_campaigns_dispatched_total{status="failed"}[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Campaign dispatch failures detected"
+
+      - alert: CacheHitRatioDrop
+        expr: amc_cache_hit_ratio{cache_layer="redis"} < 0.7
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis cache hit ratio below 70%"
+
+      - alert: QueueBacklog
+        expr: amq_queue_messages_ready > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RabbitMQ queue backlog > 10,000 messages"

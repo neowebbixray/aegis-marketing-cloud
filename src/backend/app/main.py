@@ -22,6 +22,7 @@ from app.api.graphql.schema import graphql_router
 from app.config import settings
 from app.core.api_version import APIVersionMiddleware
 from app.core.config_validator import validate_config, halt_on_critical
+from app.core.csp import CSPMiddleware
 from app.core.exceptions import register_exception_handlers
 from app.core.metrics_middleware import PrometheusMetricsMiddleware
 from app.core.middleware import (
@@ -35,6 +36,11 @@ from app.database import engine
 
 # ── Logging setup ────────────────────────────────────────────────────────────
 def _configure_logging() -> None:
+    # Load Vault secrets if Vault is running
+    from app.vault import load_vault_secrets
+    load_vault_secrets()
+    # Existing logging config follows
+
     """Set up structured logging for the application."""
     level = logging.DEBUG if settings.debug else logging.INFO
     logging.basicConfig(
@@ -146,7 +152,11 @@ def create_app() -> FastAPI:
     # 5. Tenant context
     app.add_middleware(TenantContextMiddleware)
 
-    # 6. Rate limiting (stub)
+    # 5b. Content-Security-Policy (after tenant context, before rate limiter)
+    if settings.csp_enabled:
+        app.add_middleware(CSPMiddleware)
+
+    # 6. Rate limiting — per‑tenant with Redis-backed sliding window
     app.add_middleware(RateLimitMiddleware)
 
     # 7. Logging (innermost - runs closest to the router)
@@ -159,12 +169,24 @@ def create_app() -> FastAPI:
     app.include_router(graphql_router)
 
     # Health check
-    @app.get("/health", tags=["system"], include_in_schema=False)
+    @app.get("/health", tags=["system"])
     async def health_check() -> dict[str, Any]:
-        """Legacy health endpoint — delegates to the v1 health router."""
-        from app.api.v1.health import legacy_health
+        """Health check endpoint for load balancers and monitoring."""
+        db_ok = True
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(
+                    __import__("sqlalchemy").text("SELECT 1")
+                )
+        except Exception:
+            db_ok = False
 
-        return await legacy_health()
+        return {
+            "status": "healthy" if db_ok else "degraded",
+            "app": settings.app_name,
+            "version": "0.1.0",
+            "database": "connected" if db_ok else "disconnected",
+        }
 
     return app
 

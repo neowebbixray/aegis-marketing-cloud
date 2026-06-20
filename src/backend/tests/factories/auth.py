@@ -60,7 +60,7 @@ class ApiKeyFactory(BaseFactory):
 
     user_id = factory.LazyFunction(uuid.uuid4)
     name = factory.Faker("sentence", nb_words=3)
-    key_prefix = "amc_" + factory.Faker("hexify", text="^^^^^^^^")
+    key_prefix = factory.LazyFunction(lambda: "amc_" + factory.Faker("hexify", text="^^^^^^^^").generate())
     key_hash = factory.Faker("sha256")
     scopes = factory.List(["read", "write"])
     expires_at = factory.LazyFunction(

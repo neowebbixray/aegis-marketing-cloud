@@ -42,6 +42,7 @@ volumes:
   loki-data:
   prometheus-data:
   mailpit-data:
+  vault-data:
 
 services:
   # ─── Database ────────────────────────────────────────
@@ -186,6 +187,21 @@ services:
       retries: 3
     logging: *default-logging
 
+  # ─── Vault ────────────────────────────────────────
+  vault:
+    image: hashicorp/vault:latest
+    container_name: vault
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: root
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    ports:
+      - "8200:8200"
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - vault-data:/vault/file
+    logging: *default-logging
+
   # ─── API / Backend ────────────────────────────────────
   backend:
     build:
@@ -196,8 +212,10 @@ services:
     ports: ["8000:8000"]
     env_file: ./src/backend/.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://aegis:aegis_secret@postgres:5432/aegis
+      DATABASE_URL: postgresql+asyncpg://amc:amc_secret@postgres:5432/aegis_marketing_cloud_test4
       REDIS_URL: redis://:aegis_redis@redis:6379/0
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: root
       QDRANT_URL: http://qdrant:6333
       MINIO_ENDPOINT: minio:9000
       RABBITMQ_URL: amqp://aegis:aegis_rabbit@rabbitmq:5672/
@@ -205,16 +223,13 @@ services:
       - ./src/backend:/app
       - ./media-library:/media-library
     command: >
-      sh -c "
-      alembic upgrade head &&
       uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
-      "
     depends_on:
-      postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
-      qdrant: { condition: service_healthy }
-      minio: { condition: service_healthy }
-      rabbitmq: { condition: service_healthy }
+      - postgres
+      - redis
+      - qdrant
+      - minio
+      - rabbitmq
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -232,8 +247,10 @@ services:
     networks: [amc-network]
     env_file: ./src/backend/.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://aegis:aegis_secret@postgres:5432/aegis
+      DATABASE_URL: postgresql+asyncpg://amc:amc_secret@postgres:5432/aegis_marketing_cloud_test4
       REDIS_URL: redis://:aegis_redis@redis:6379/0
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: root
       QDRANT_URL: http://qdrant:6333
       MINIO_ENDPOINT: minio:9000
       RABBITMQ_URL: amqp://aegis:aegis_rabbit@rabbitmq:5672/
@@ -255,8 +272,10 @@ services:
     ports: ["5555:5555"]
     env_file: ./src/backend/.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://aegis:aegis_secret@postgres:5432/aegis
+      DATABASE_URL: postgresql+asyncpg://amc:amc_secret@postgres:5432/aegis_marketing_cloud_test4
       REDIS_URL: redis://:aegis_redis@redis:6379/0
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: root
     command: celery -A app.tasks.celery_app flower --port=5555
     depends_on: [worker]
     logging: *default-logging
@@ -290,6 +309,8 @@ services:
       - grafana-data:/var/lib/grafana
       - ./infra/compose/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./infra/compose/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./infra/compose/grafana/alerting:/etc/grafana/provisioning/alerting:ro
+      - ./infra/compose/grafana/notifications:/etc/grafana/provisioning/notifications:ro
     depends_on: [prometheus, loki]
     logging: *default-logging
 

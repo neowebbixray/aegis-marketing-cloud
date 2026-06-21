@@ -20,162 +20,239 @@ import {
   ImageIcon,
   BookOpen,
   FileText,
+  SlidersHorizontal,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/atoms/button';
-import { Badge } from '@/components/atoms/badge';
-import { SidebarUserButton } from './features/auth/sidebar-user-button';
+import { Separator } from '@/components/atoms/separator';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/atoms/tooltip';
+import { SidebarUserButton } from '@/components/organisms/features/auth/sidebar-user-button';
 
-// ─── Navigation Definitions ────────────────────────────────
+// ─── Types ────────────────────────────────────────────────
 
 interface NavItem {
-  title: string;
+  label: string;
   href: string;
   icon: React.ElementType;
   badge?: string;
 }
 
-interface NavSection {
+interface NavGroup {
   title: string;
   items: NavItem[];
 }
 
-const navSections: NavSection[] = [
+// ─── Navigation Configuration ──────────────────────────────
+
+const navGroups: NavGroup[] = [
   {
-    title: 'Main',
-    items: [{ title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard }],
+    title: 'Overview',
+    items: [
+      { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    ],
   },
   {
     title: 'CRM',
     items: [
-      { title: 'Contacts', href: '/crm/contacts', icon: Users },
-      { title: 'Deals', href: '/crm/deals', icon: Briefcase },
-      { title: 'Pipelines', href: '/crm/pipelines', icon: GitBranch },
+      { label: 'Contacts', href: '/crm/contacts', icon: Users },
+      { label: 'Deals', href: '/crm/deals', icon: Briefcase },
+      { label: 'Pipelines', href: '/crm/pipelines', icon: GitBranch },
+      { label: 'Custom Fields', href: '/crm/custom-fields', icon: SlidersHorizontal },
     ],
   },
   {
     title: 'Marketing',
     items: [
-      { title: 'Campaigns', href: '/marketing/campaigns', icon: Megaphone, badge: 'New' },
-      { title: 'AI Suite', href: '/ai-suite', icon: Brain, badge: 'Beta' },
-    ],
-  },
-  {
-    title: 'Channels',
-    items: [
-      { title: 'SEO', href: '/marketing/seo', icon: SearchIcon },
-      { title: 'Social', href: '/marketing/social', icon: Share2 },
+      { label: 'Campaigns', href: '/marketing/campaigns', icon: Megaphone },
+      { label: 'Social', href: '/marketing/social', icon: Share2 },
+      { label: 'SEO', href: '/marketing/seo', icon: SearchIcon },
     ],
   },
   {
     title: 'Analytics',
     items: [
-      { title: 'Dashboards', href: '/analytics', icon: BarChart3 },
-      { title: 'Reports', href: '/analytics/reports', icon: FileText },
+      { label: 'Overview', href: '/analytics', icon: BarChart3 },
+      { label: 'Reports', href: '/analytics/reports', icon: FileText },
     ],
   },
   {
-    title: 'Settings',
+    title: 'AI Suite',
     items: [
-      { title: 'Settings', href: '/settings', icon: Settings },
-      { title: 'Billing', href: '/billing', icon: CreditCard },
-      { title: 'Webhooks', href: '/webhooks', icon: Webhook },
+      { label: 'Playground', href: '/ai-suite', icon: Brain },
     ],
   },
   {
     title: 'Content',
     items: [
-      { title: 'Media Library', href: '/media', icon: ImageIcon },
-      { title: 'Knowledge Base', href: '/knowledge', icon: BookOpen },
+      { label: 'Knowledge', href: '/knowledge', icon: BookOpen },
+      { label: 'Media', href: '/media', icon: ImageIcon },
+    ],
+  },
+  {
+    title: 'Operations',
+    items: [
+      { label: 'Webhooks', href: '/webhooks', icon: Webhook },
+      { label: 'Billing', href: '/billing', icon: CreditCard },
     ],
   },
 ];
 
-// ─── Icons ─────────────────────────────────────────────────
+const bottomItems: NavItem[] = [
+  { label: 'Settings', href: '/settings', icon: Settings },
+];
 
-export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+// ─── Sidebar Component ────────────────────────────────────
+
+export function Sidebar({
+  collapsed,
+  onToggle,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
   const pathname = usePathname();
+
+  const isActive = (href: string) => {
+    // Exact match for home; prefix match for sub-routes
+    if (href === '/dashboard') return pathname === '/dashboard';
+    return pathname.startsWith(href);
+  };
 
   return (
     <aside
       className={cn(
-        'fixed inset-y-0 left-0 z-30 flex flex-col border-r bg-card transition-all duration-300',
+        'fixed left-0 top-0 z-30 flex h-screen flex-col border-r bg-background transition-all duration-300',
         collapsed ? 'w-16' : 'w-64'
       )}
     >
-      {/* Logo */}
-      <div className="flex h-16 items-center justify-between border-b px-4">
-        <Link href="/dashboard" className={cn('flex items-center gap-2', collapsed && 'justify-center w-full')}>
-          <div className="rounded-lg bg-primary p-1.5">
-            <BarChart3 className="h-5 w-5 text-primary-foreground" />
+      {/* ── Logo / Brand ── */}
+      <div
+        className={cn(
+          'flex h-16 items-center border-b px-4',
+          collapsed ? 'justify-center' : 'justify-between'
+        )}
+      >
+        <Link href="/dashboard" className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">
+            AM
           </div>
-          {!collapsed && <span className="font-bold text-lg">Aegis</span>}
+          {!collapsed && (
+            <span className="text-base font-semibold tracking-tight">Aegis</span>
+          )}
         </Link>
         <Button
           variant="ghost"
-          size="icon-sm"
+          size="icon"
           onClick={onToggle}
-          className={cn('hidden lg:flex', collapsed && 'hidden')}
+          className="hidden lg:flex h-7 w-7"
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          <Menu className="h-4 w-4" />
+          {collapsed ? (
+            <ChevronRight className="h-4 w-4" />
+          ) : (
+            <ChevronLeft className="h-4 w-4" />
+          )}
         </Button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto p-3 space-y-4">
-        {navSections.map((section) => (
-          <div key={section.title}>
+      {/* ── Navigation ── */}
+      <nav className="flex-1 overflow-y-auto px-2 py-4 scrollbar-thin">
+        {navGroups.map((group) => (
+          <div key={group.title} className="mb-4">
             {!collapsed && (
-              <p className="px-2 mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {section.title}
+              <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                {group.title}
               </p>
             )}
-            <div className="space-y-1">
-              {section.items.map((item) => {
-                const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+            <ul className="space-y-0.5">
+              {group.items.map((item) => {
+                const active = isActive(item.href);
                 const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                      isActive
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-                      collapsed && 'justify-center px-2'
-                    )}
-                    title={collapsed ? item.title : undefined}
-                  >
-                    <Icon className="h-5 w-5 shrink-0" />
-                    {!collapsed && (
-                      <>
-                        <span className="flex-1">{item.title}</span>
-                        {item.badge && (
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                            {item.badge}
-                          </Badge>
-                        )}
-                      </>
-                    )}
-                  </Link>
+                const navLink = (
+                  <li>
+                    <Link
+                      href={item.href}
+                      className={cn(
+                        'flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium transition-colors',
+                        active
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                        collapsed && 'justify-center px-0'
+                      )}
+                    >
+                      <Icon className="h-5 w-5 shrink-0" />
+                      {!collapsed && (
+                        <span className="truncate">{item.label}</span>
+                      )}
+                      {!collapsed && item.badge && (
+                        <span className="ml-auto rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                          {item.badge}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
                 );
+
+                if (collapsed) {
+                  return (
+                    <Tooltip key={item.href} delayDuration={300}>
+                      <TooltipTrigger asChild>{navLink}</TooltipTrigger>
+                      <TooltipContent side="right" className="ml-2">
+                        {item.label}
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                }
+                return navLink;
               })}
-            </div>
+            </ul>
           </div>
         ))}
       </nav>
 
-      {/* User footer */}
-      {collapsed ? (
-        <div className="border-t p-3 flex justify-center">
-          <SidebarUserButton collapsed />
-        </div>
-      ) : (
-        <div className="border-t p-3">
-          <SidebarUserButton collapsed={false} />
-        </div>
-      )}
+      {/* ── Bottom Section ── */}
+      <div className="border-t px-2 py-3">
+        <ul className="space-y-0.5">
+          {bottomItems.map((item) => {
+            const active = isActive(item.href);
+            const Icon = item.icon;
+            const navLink = (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium transition-colors',
+                    active
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                    collapsed && 'justify-center px-0'
+                  )}
+                >
+                  <Icon className="h-5 w-5 shrink-0" />
+                  {!collapsed && <span>{item.label}</span>}
+                </Link>
+              </li>
+            );
+
+            if (collapsed) {
+              return (
+                <Tooltip key={item.href} delayDuration={300}>
+                  <TooltipTrigger asChild>{navLink}</TooltipTrigger>
+                  <TooltipContent side="right" className="ml-2">
+                    {item.label}
+                  </TooltipContent>
+                </Tooltip>
+              );
+            }
+            return navLink;
+          })}
+        </ul>
+
+        {!collapsed && <Separator className="my-2" />}
+        <SidebarUserButton collapsed={collapsed} />
+      </div>
     </aside>
   );
 }

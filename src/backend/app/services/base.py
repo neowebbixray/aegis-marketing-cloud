@@ -5,10 +5,11 @@ Base service with common CRUD operations for all entity services.
 from __future__ import annotations
 
 import logging
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 from uuid import UUID
 
-from sqlalchemy import Select, select, func, delete as sa_delete
+from sqlalchemy import Select, func, select
+from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 

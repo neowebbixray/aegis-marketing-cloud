@@ -29,3 +29,5 @@ docker-data/
 *.pub.pem
 .DS_Store
 Thumbs.db
+fix_*.py
+check_*.py

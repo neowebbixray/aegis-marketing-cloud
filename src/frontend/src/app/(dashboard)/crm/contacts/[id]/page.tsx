@@ -2,6 +2,8 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useContact, useContactActivities } from '@/hooks/use-contacts';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { aiApi } from '@/lib/api';
 import {
   ArrowLeft,
   Mail,
@@ -18,6 +20,7 @@ import {
   Activity as ActivityIcon,
   FileText,
   Link2,
+  Zap, // for AI rescore
 } from 'lucide-react';
 import { Button } from '@/components/atoms/button';
 import { Badge } from '@/components/atoms/badge';
@@ -48,8 +51,6 @@ import { Skeleton } from '@/components/atoms/skeleton';
 import { formatDate, formatDateTime, getInitials } from '@/lib/utils';
 import type { Activity, ActivityType } from '@/types';
 
-// ─── Activity Icon ────────────────────────────────────────
-
 function getActivityIcon(type: ActivityType) {
   switch (type) {
     case 'note': return MessageSquare;
@@ -72,7 +73,23 @@ function getActivityColor(type: ActivityType) {
   }
 }
 
-// ─── Info Row ─────────────────────────────────────────────
+// Helper to get score tier color
+function getScoreTierColor(score: number | undefined) {
+  if (score === undefined) return 'bg-muted text-muted-foreground';
+  if (score >= 70) return 'bg-destructive/10 text-destructive'; // hot
+  if (score >= 40) return 'bg-warning/10 text-warning'; // warm
+  return 'bg-success/10 text-success'; // cold
+}
+
+// Helper to get score tier label
+function getScoreTierLabel(score: number | undefined) {
+  if (score === undefined) return 'Unscored';
+  if (score >= 70) return 'Hot';
+  if (score >= 40) return 'Warm';
+  return 'Cold';
+}
+
+// ─── Info Row ─────────────────────────────────────────
 
 function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string | undefined | null }) {
   return (
@@ -97,17 +114,35 @@ const stageColors: Record<string, string> = {
   inactive: 'bg-muted text-muted-foreground',
 };
 
-// ─── Contact Detail Page ──────────────────────────────────
+const ScoreBadge = ({ score }: { score: number | undefined }) => {
+  if (score === undefined) {
+    return <Badge variant="outline" className="bg-muted text-muted-foreground">Unscored</Badge>;
+  }
+  const tier = getScoreTierLabel(score);
+  const colorClass = getScoreTierColor(score);
+  return <Badge variant="outline" className={colorClass}>{tier} ({score})</Badge>;
+};
 
+// ─── Contact Detail Page ──────────────────────────────
 export default function ContactDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = params?.id as string;
+  const queryClient = useQueryClient();
   const { data: contactData, isLoading, error } = useContact(id);
   const { data: activitiesData } = useContactActivities(id);
 
   const contact = contactData?.data;
-  const activities = activitiesData?.data ?? [];
+
+  // Mutation for rescoring lead with AI
+  const { mutate: rescoreLead, isLoading: isRescoring } = useMutation({
+    mutationFn: (contactId: string) =>
+      aiApi.scoreLead({ contact_id: contactId, tenant_id: contact?.tenant_id ?? '' }),
+    onSuccess: () => {
+      // Invalidate and refetch the contact to get updated score
+      queryClient.invalidateQueries({ queryKey: ['contacts', id] });
+    },
+  });
 
   if (isLoading) {
     return (
@@ -210,6 +245,29 @@ export default function ContactDetailPage() {
                 <InfoRow icon={Building2} label="Company" value={contact.company} />
                 <InfoRow icon={MapPin} label="Job Title" value={contact.job_title} />
                 <InfoRow icon={Calendar} label="Created" value={formatDate(contact.created_at)} />
+                {/* Lead Score */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Lead Score</span>
+                  <ScoreBadge score={contact.score} />
+                </div>
+                {/* Rescore with AI button */}
+                {!isRescoring && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => rescoreLead(contact.id)}
+                    className="mt-2"
+                  >
+                    <Zap className="mr-2 h-4 w-4" />
+                    Rescore with AI
+                  </Button>
+                )}
+                {isRescoring && (
+                  <Button variant="ghost" size="sm" className="mt-2" disabled>
+                    <Zap className="mr-2 h-4 w-4" />
+                    Scoring...
+                  </Button>
+                )}
               </CardContent>
             </Card>
 
@@ -258,9 +316,7 @@ export default function ContactDetailPage() {
               <CardDescription>Associated deals and opportunities</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground py-8 text-center">
-                No deals associated with this contact yet.
-              </p>
+              <p className="text-sm text-muted-foreground py-8 text-center">                No deals associated with this contact yet.              </p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -319,9 +375,7 @@ export default function ContactDetailPage() {
               <CardDescription>Internal notes about this contact</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground py-8 text-center">
-                {contact.notes || 'No notes added yet.'}
-              </p>
+              <p className="text-sm text-muted-foreground py-8 text-center">                {contact.notes || 'No notes added yet.'}              </p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -334,9 +388,7 @@ export default function ContactDetailPage() {
               <CardDescription>Attachments and documents</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground py-8 text-center">
-                No files attached yet.
-              </p>
+              <p className="text-sm text-muted-foreground py-8 text-center">                No files attached yet.              </p>
             </CardContent>
           </Card>
         </TabsContent>

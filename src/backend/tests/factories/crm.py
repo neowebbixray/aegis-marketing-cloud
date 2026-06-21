@@ -6,12 +6,10 @@ Contact, Deal, Pipeline, PipelineStage, Activity.
 from __future__ import annotations
 
 import uuid
-from decimal import Decimal
 
 import factory
-from factory.alchemy import SQLAlchemyModelFactory
-
 from app.models.crm import Activity, Contact, Deal, Pipeline, PipelineStage
+from factory.alchemy import SQLAlchemyModelFactory
 
 
 class BaseFactory(SQLAlchemyModelFactory):

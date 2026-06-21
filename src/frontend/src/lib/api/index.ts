@@ -87,3 +87,27 @@ export type {
   SearchResult,
   IndexingJob,
 } from './knowledge';
+
+export {
+  customFieldsApi,
+  contactsApi,
+  dealsApi,
+  pipelinesApi,
+  activitiesApi,
+} from './api';
+export type {
+  CustomFieldType,
+  CustomFieldDefinition,
+  CreateCustomFieldDefinitionRequest,
+  UpdateCustomFieldDefinitionRequest,
+  Contact,
+  CreateContactRequest,
+  UpdateContactRequest,
+  Deal,
+  DealStage,
+  CreateDealRequest,
+  UpdateDealRequest,
+  Pipeline,
+  CreatePipelineRequest,
+  Activity,
+} from './api';

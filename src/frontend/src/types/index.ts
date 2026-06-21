@@ -1,153 +1,69 @@
-// ─── Core API Types ───────────────────────────────────────
+// ─── API Response Wrappers ─────────────────────────────────
 
 export interface ApiResponse<T> {
   data: T;
-  meta?: PaginationMeta;
-  links?: PaginationLinks;
+  meta?: {
+    page: number;
+    per_page: number;
+    total: number;
+    has_more: boolean;
+  };
+  links: { self: string };
 }
 
-export interface PaginatedResponse<T> {
-  data: T[];
-  meta: PaginationMeta;
-  links: PaginationLinks;
-}
+export interface PaginatedResponse<T> extends ApiResponse<T[]> {}
 
-export interface PaginationMeta {
-  page: number;
-  per_page: number;
-  total: number;
-  has_more: boolean;
-  cursor?: string;
-  offset?: number;
-}
-
-export interface PaginationLinks {
-  self: string;
-  next?: string;
-  prev?: string;
-}
-
-export interface ApiError {
-  type: string;
-  title: string;
-  status: number;
-  detail: string;
-  instance: string;
-  trace_id?: string;
-  errors?: ApiFieldError[];
-}
-
-export interface ApiFieldError {
-  field: string;
-  message: string;
-  code: string;
-}
-
-// ─── Auth Types ───────────────────────────────────────────
-
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-export interface RegisterRequest {
-  email: string;
-  password: string;
-  confirm_password: string;
-  display_name: string;
-}
-
-export interface AuthTokens {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  expires_in: number;
-}
+// ─── CRM Types ─────────────────────────────────────────────
 
 export interface User {
   id: string;
   email: string;
-  display_name: string;
-  avatar_url?: string;
-  roles: string[];
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-// ─── Tenant / Workspace Types ────────────────────────────
-
-export interface Tenant {
-  id: string;
   name: string;
-  slug: string;
-  plan: 'free' | 'pro' | 'business' | 'enterprise';
-  is_active: boolean;
-  created_at: string;
+  avatar_url?: string | null;
 }
 
-export interface Workspace {
+export interface DealStage {
   id: string;
-  tenant_id: string;
+  pipeline_id: string;
   name: string;
-  slug: string;
-  description?: string;
-  is_default: boolean;
-  created_at: string;
+  order: number;
+  probability?: number | null;
+  colour?: string | null;
 }
-
-// ─── CRM Types ────────────────────────────────────────────
-
-export type LifecycleStage =
-  | 'lead'
-  | 'qualified'
-  | 'opportunity'
-  | 'customer'
-  | 'churned'
-  | 'inactive';
-
-export type ContactSource =
-  | 'manual'
-  | 'import'
-  | 'website'
-  | 'referral'
-  | 'social'
-  | 'email'
-  | 'api'
-  | 'other';
 
 export interface Contact {
   id: string;
   workspace_id: string;
   first_name: string;
   last_name: string;
-  email: string;
-  phone?: string;
-  company?: string;
-  job_title?: string;
-  avatar_url?: string;
-  lifecycle_stage: LifecycleStage;
-  source: ContactSource;
-  owner_id?: string;
-  owner?: User;
+  email?: string | null;
+  phone?: string | null;
+  company?: string | null;
+  position?: string | null;
+  lifecycle_stage: string;
+  source?: string | null;
+  custom_fields: Record<string, unknown>;
   tags: string[];
-  notes?: string;
+  owner_id?: string | null;
+  score?: number | null;
+  score_updated_at?: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface CreateContactRequest {
+  workspace_id: string;
   first_name: string;
   last_name: string;
-  email: string;
+  email?: string;
   phone?: string;
   company?: string;
-  job_title?: string;
-  lifecycle_stage?: LifecycleStage;
-  source?: ContactSource;
-  owner_id?: string;
+  position?: string;
+  lifecycle_stage?: string;
+  source?: string;
+  custom_fields?: Record<string, unknown>;
   tags?: string[];
-  notes?: string;
+  owner_id?: string;
 }
 
 export interface UpdateContactRequest {
@@ -156,56 +72,53 @@ export interface UpdateContactRequest {
   email?: string;
   phone?: string;
   company?: string;
-  job_title?: string;
-  lifecycle_stage?: LifecycleStage;
-  source?: ContactSource;
-  owner_id?: string;
+  position?: string;
+  lifecycle_stage?: string;
+  source?: string;
+  custom_fields?: Record<string, unknown>;
   tags?: string[];
-  notes?: string;
+  owner_id?: string;
 }
-
-export type DealStage =
-  | 'lead_in'
-  | 'qualified'
-  | 'proposal'
-  | 'negotiation'
-  | 'closed_won'
-  | 'closed_lost';
 
 export interface Deal {
   id: string;
   workspace_id: string;
   name: string;
-  value: number;
+  value?: number | null;
   currency: string;
-  probability: number;
-  stage: DealStage;
+  probability?: number | null;
+  stage: string;
   pipeline_id: string;
   pipeline_stage_id: string;
-  contact_id?: string;
-  contact?: Contact;
-  owner_id?: string;
-  owner?: User;
-  expected_close_date?: string;
-  notes?: string;
+  contact_id?: string | null;
+  contact?: Contact | null;
+  owner_id?: string | null;
+  owner?: User | null;
+  expected_close_date?: string | null;
+  custom_fields: Record<string, unknown>;
   tags: string[];
+  notes?: string;
+  // Win/Loss tracking fields
+  lost_reason?: string | null;
+  lost_at?: string | null;
+  won_reason?: string | null;
+  won_at?: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface CreateDealRequest {
+  workspace_id: string;
   name: string;
-  value: number;
+  value?: number;
   currency?: string;
   probability?: number;
-  stage?: DealStage;
-  pipeline_id: string;
   pipeline_stage_id: string;
   contact_id?: string;
+  organization_label?: string;
   owner_id?: string;
   expected_close_date?: string;
-  notes?: string;
-  tags?: string[];
+  custom_fields?: Record<string, unknown>;
 }
 
 export interface UpdateDealRequest {
@@ -213,77 +126,93 @@ export interface UpdateDealRequest {
   value?: number;
   currency?: string;
   probability?: number;
-  stage?: DealStage;
-  pipeline_id?: string;
   pipeline_stage_id?: string;
   contact_id?: string;
   owner_id?: string;
   expected_close_date?: string;
-  notes?: string;
-  tags?: string[];
+  custom_fields?: Record<string, unknown>;
 }
 
 export interface Pipeline {
   id: string;
   workspace_id: string;
   name: string;
-  description?: string;
+  description?: string | null;
   is_default: boolean;
-  stages: PipelineStage[];
+  stages: DealStage[];
   created_at: string;
   updated_at: string;
 }
 
-export interface PipelineStage {
-  id: string;
-  pipeline_id: string;
-  name: string;
-  color: string;
-  order: number;
-  probability: number;
-  created_at: string;
-}
-
 export interface CreatePipelineRequest {
+  workspace_id: string;
   name: string;
   description?: string;
-  stages: { name: string; color: string; probability: number }[];
+  is_default?: boolean;
+  stages?: {
+    name: string;
+    order?: number;
+    probability?: number;
+    colour?: string;
+  }[];
 }
-
-// ─── Notification Types ─────────────────────────────────────
-
-export type NotificationType = 'info' | 'success' | 'warning' | 'error';
-
-export interface Notification {
-  id: string;
-  type: NotificationType;
-  title: string;
-  message?: string;
-  read: boolean;
-  workspace_id?: string;
-  metadata?: Record<string, unknown>;
-  created_at: string;
-}
-
-export type ActivityType =
-  | 'note'
-  | 'call'
-  | 'email'
-  | 'meeting'
-  | 'task'
-  | 'deal_update'
-  | 'stage_change'
-  | 'system';
 
 export interface Activity {
   id: string;
   workspace_id: string;
-  contact_id?: string;
-  deal_id?: string;
-  type: ActivityType;
-  title: string;
-  description?: string;
-  metadata?: Record<string, unknown>;
-  created_by: string;
+  type: string;
+  subject: string;
+  description?: string | null;
+  contact_id?: string | null;
+  deal_id?: string | null;
+  user_id?: string | null;
   created_at: string;
+  updated_at: string;
+}
+
+export type ActivityType = 'note' | 'call' | 'email' | 'meeting' | 'task';
+
+export type CustomFieldType =
+  | 'text'
+  | 'number'
+  | 'date'
+  | 'dropdown'
+  | 'multi_select'
+  | 'url';
+
+export interface CustomFieldDefinition {
+  id: string;
+  workspace_id: string;
+  name: string;
+  key: string;
+  description?: string;
+  field_type: CustomFieldType;
+  config: Record<string, unknown>;
+  is_required: boolean;
+  is_active: boolean;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCustomFieldDefinitionRequest {
+  workspace_id: string;
+  name: string;
+  key: string;
+  description?: string;
+  field_type: CustomFieldType;
+  config?: Record<string, unknown>;
+  is_required?: boolean;
+  is_active?: boolean;
+  display_order?: number;
+}
+
+export interface UpdateCustomFieldDefinitionRequest {
+  name?: string;
+  description?: string;
+  field_type?: CustomFieldType;
+  config?: Record<string, unknown>;
+  is_required?: boolean;
+  is_active?: boolean;
+  display_order?: number;
 }

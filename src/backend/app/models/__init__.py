@@ -1,28 +1,30 @@
-"""Export all SQLAlchemy models for Alembic and application imports."""
-from app.models.base import BaseModel, TimestampMixin, SoftDeleteMixin, TenantMixin
-from app.models.auth import User, OAuthAccount, Session, MfaDevice, ApiKey
-from app.models.tenant import (
-    Tenant,
-    Workspace,
-    Team,
-    TeamMember,
-    Role,
-    Permission,
-    RolePermission,
-    UserRole,
-    PendingInvitation,
-)
-from app.models.crm import Contact, Deal, Pipeline, PipelineStage, Activity
-from app.models.marketing import Campaign, EmailTemplate, LandingPage, Funnel, Segment, Tag
-from app.models.ai import AIAgent, AIAgentExecution, KnowledgeDocument, Conversation, Message
-from app.models.billing import Subscription, Invoice, CreditWallet, UsageRecord
-from app.models.media import Asset
-from app.models.webhooks import Webhook, WebhookDelivery
+"""
+Export all SQLAlchemy models for Alembic and application imports.
+"""
+from app.models.ai import AIAgent, AIAgentExecution, Conversation, KnowledgeDocument, Message
 from app.models.analytics import AnalyticsEvent, Dashboard, MetricSnapshot, ScheduledReport
+from app.models.auth import ApiKey, MfaDevice, OAuthAccount, Session, User
+from app.models.base import BaseModel, SoftDeleteMixin, TenantMixin, TimestampMixin
+from app.models.billing import CreditWallet, Invoice, Subscription, UsageRecord
+from app.models.crm import Activity, Contact, CustomFieldDefinition, Deal, LeadScoreHistory, Pipeline, PipelineStage
 from app.models.email import EmailCampaign, EmailMessage
+from app.models.marketing import Campaign, EmailTemplate, Funnel, LandingPage, Segment, Tag
 from app.models.marketplace import MarketplaceInstallation
+from app.models.media import Asset
 from app.models.notifications import Notification
 from app.models.seo import SeoKeyword
+from app.models.tenant import (
+    PendingInvitation,
+    Permission,
+    Role,
+    RolePermission,
+    Team,
+    TeamMember,
+    Tenant,
+    UserRole,
+    Workspace,
+)
+from app.models.webhooks import Webhook, WebhookDelivery
 
 __all__ = [
     # Base
@@ -48,7 +50,9 @@ __all__ = [
     "PendingInvitation",
     # CRM
     "Contact",
+    "CustomFieldDefinition",
     "Deal",
+    "LeadScoreHistory",
     "Pipeline",
     "PipelineStage",
     "Activity",

@@ -1,20 +1,18 @@
 """
-SQLAlchemy models for the CRM module: Contact, Deal, Pipeline, PipelineStage,
-and Activity.
+SQLAlchemy models for CRM:
+Contact, Deal, Pipeline, PipelineStage, Activity, CustomFieldDefinition, LeadScoreHistory.
 """
 
 from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
-from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
-    Float,
     ForeignKey,
     Integer,
     Numeric,
@@ -22,14 +20,17 @@ from sqlalchemy import (
     Text,
     Uuid,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import BaseModel, SoftDeleteMixin
+from app.models.base import BaseModel, SoftDeleteMixin, TimestampMixin
+
+
+# ── Contact ──────────────────────────────────────────────────────────────────
 
 
 class Contact(BaseModel, SoftDeleteMixin):
-    """Customer / lead / contact record."""
+    """A contact/person record in the CRM."""
 
     __tablename__ = "contacts"
 
@@ -41,30 +42,52 @@ class Contact(BaseModel, SoftDeleteMixin):
     )
     first_name: Mapped[str] = mapped_column(String(128), nullable=False)
     last_name: Mapped[str] = mapped_column(String(128), nullable=False)
-    email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True, index=True)
-    phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
-    company: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
-    position: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True, index=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    company: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    position: Mapped[str | None] = mapped_column(String(256), nullable=True)
     lifecycle_stage: Mapped[str] = mapped_column(
         String(32), default="lead", nullable=False
-    )  # lead, qualified, opportunity, customer, churned
-    source: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    custom_fields: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    )
+    source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    custom_fields: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, default=dict, nullable=True
     )
-    tags: Mapped[Optional[list[str]]] = mapped_column(
+    tags: Mapped[list[str] | None] = mapped_column(
         ARRAY(Text), default=list, nullable=True
     )
-    owner_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # Lead scoring fields (added via 0006 migration)
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="0-100 lead score")
+    score_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="Timestamp when score was last updated",
+    )
+    # Full-text search vector (added via 0004 migration)
+    search_vector: Mapped[str | None] = mapped_column(
+        TSVECTOR, nullable=True, comment="Full-text search vector"
+    )
+
+    # Relationships
+    deals: Mapped[list[Deal]] = relationship("Deal", back_populates="contact", passive_deletes=True)
+    activities: Mapped[list[Activity]] = relationship(
+        "Activity", back_populates="contact", passive_deletes=True
+    )
+    lead_score_history: Mapped[list[LeadScoreHistory]] = relationship(
+        "LeadScoreHistory", back_populates="contact", passive_deletes=True
     )
 
     def __repr__(self) -> str:
         return f"<Contact {self.first_name} {self.last_name}>"
 
 
+# ── Pipeline ────────────────────────────────────────────────────────────────
+
+
 class Pipeline(BaseModel, SoftDeleteMixin):
-    """Sales pipeline / funnel definition."""
+    """A sales pipeline with ordered stages."""
 
     __tablename__ = "pipelines"
 
@@ -75,48 +98,51 @@ class Pipeline(BaseModel, SoftDeleteMixin):
         Uuid(as_uuid=True), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(256), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Relationships
-    stages: Mapped[list["PipelineStage"]] = relationship(
-        "PipelineStage",
-        back_populates="pipeline",
+    stages: Mapped[list[PipelineStage]] = relationship(
+        "PipelineStage", back_populates="pipeline",
         cascade="all, delete-orphan",
         order_by="PipelineStage.order",
-    )
-    deals: Mapped[list["Deal"]] = relationship(
-        "Deal", back_populates="pipeline", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
         return f"<Pipeline {self.name}>"
 
 
+# ── PipelineStage ───────────────────────────────────────────────────────────
+
+
 class PipelineStage(BaseModel):
-    """A stage within a pipeline."""
+    """A single stage within a pipeline."""
 
     __tablename__ = "pipeline_stages"
 
     pipeline_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("pipelines.id", ondelete="CASCADE"), nullable=False
+        Uuid(as_uuid=True),
+        ForeignKey("pipelines.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     name: Mapped[str] = mapped_column(String(256), nullable=False)
-    order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    probability: Mapped[Optional[float]] = mapped_column(
-        Float, nullable=True
-    )  # win probability 0-100
-    colour: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)  # hex colour
+    order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    probability: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    colour: Mapped[str | None] = mapped_column(String(7), nullable=True)
 
     # Relationships
-    pipeline: Mapped["Pipeline"] = relationship("Pipeline", back_populates="stages")
+    pipeline: Mapped[Pipeline] = relationship("Pipeline", back_populates="stages")
 
     def __repr__(self) -> str:
-        return f"<PipelineStage {self.name} (order={self.order})>"
+        return f"<PipelineStage {self.name} (pipeline={self.pipeline_id})>"
 
 
-class Deal(BaseModel, SoftDeleteMixin):
-    """Sales opportunity / deal record."""
+# ── Deal ────────────────────────────────────────────────────────────────────
+
+
+class Deal(BaseModel):
+    """Deal/opportunity in a pipeline."""
 
     __tablename__ = "deals"
 
@@ -127,42 +153,56 @@ class Deal(BaseModel, SoftDeleteMixin):
         Uuid(as_uuid=True), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(512), nullable=False)
-    value: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(12, 2), nullable=True, default=Decimal("0.00")
-    )
+    value: Mapped[float | None] = mapped_column(Numeric(12, 2), default=0, nullable=True)
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
     pipeline_stage_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("pipeline_stages.id", ondelete="RESTRICT"), nullable=False
+        Uuid(as_uuid=True),
+        ForeignKey("pipeline_stages.id", ondelete="RESTRICT"),
+        nullable=False,
     )
-    contact_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("contacts.id", ondelete="SET NULL"), nullable=True
+    contact_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("contacts.id", ondelete="SET NULL"),
+        nullable=True,
     )
-    organization_label: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
-    owner_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    organization_label: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    probability: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    expected_close_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    custom_fields: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    probability: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)  # 0-100
+    expected_close_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    custom_fields: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, default=dict, nullable=True
+    )
+    # Win/Loss tracking fields
+    lost_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lost_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    won_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    won_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Full-text search vector (added via 0004 migration)
+    search_vector: Mapped[str | None] = mapped_column(
+        TSVECTOR, nullable=True, comment="Full-text search vector"
     )
 
     # Relationships
-    pipeline_stage: Mapped["PipelineStage"] = relationship("PipelineStage")
-    pipeline: Mapped["Pipeline"] = relationship(
-        "Pipeline",
-        primaryjoin="Deal.pipeline_stage_id == PipelineStage.id",
-        secondary="pipeline_stages",
-        secondaryjoin="PipelineStage.pipeline_id == Pipeline.id",
-        viewonly=True,
+    contact: Mapped[Contact | None] = relationship("Contact", back_populates="deals")
+    activities: Mapped[list[Activity]] = relationship(
+        "Activity", back_populates="deal", passive_deletes=True
     )
 
     def __repr__(self) -> str:
-        return f"<Deal {self.name} (${self.value})>"
+        return f"<Deal {self.name} ({self.value} {self.currency})>"
+
+
+# ── Activity ────────────────────────────────────────────────────────────────
 
 
 class Activity(BaseModel, SoftDeleteMixin):
-    """Activity / engagement record associated with contacts and deals."""
+    """A tracked activity (call, email, meeting, note, etc.) linked to a contact and/or deal."""
 
     __tablename__ = "activities"
 
@@ -173,19 +213,95 @@ class Activity(BaseModel, SoftDeleteMixin):
         Uuid(as_uuid=True), nullable=False, index=True
     )
     type: Mapped[str] = mapped_column(
-        String(16), nullable=False
-    )  # note, call, email, meeting, task
+        String(16), nullable=False, comment="call, email, meeting, task, note, etc."
+    )
     subject: Mapped[str] = mapped_column(String(512), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    contact_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("contacts.id", ondelete="SET NULL"), nullable=True
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    contact_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("contacts.id", ondelete="SET NULL"),
+        nullable=True,
     )
-    deal_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("deals.id", ondelete="SET NULL"), nullable=True
+    deal_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("deals.id", ondelete="SET NULL"),
+        nullable=True,
     )
-    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
+
+    # Relationships
+    contact: Mapped[Contact | None] = relationship("Contact", back_populates="activities")
+    deal: Mapped[Deal | None] = relationship("Deal", back_populates="activities")
 
     def __repr__(self) -> str:
         return f"<Activity {self.type}: {self.subject}>"
+
+
+# ── CustomFieldDefinition ───────────────────────────────────────────────────
+
+
+class CustomFieldDefinition(BaseModel, SoftDeleteMixin):
+    """Custom field definition for contacts/workspace."""
+
+    __tablename__ = "custom_field_definitions"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, index=True
+    )
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(128), nullable=False)  # Field label
+    key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)  # API key/field name
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    field_type: Mapped[str] = mapped_column(
+        String(32), nullable=False
+    )  # text, number, date, dropdown, multi_select, url
+    config: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, default=dict, nullable=True
+    )  # For dropdown options, validation rules, etc.
+    is_required: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<CustomFieldDefinition {self.name} ({self.key})>"
+
+
+# ── LeadScoreHistory ────────────────────────────────────────────────────────
+
+
+class LeadScoreHistory(BaseModel):
+    """Historical record of lead scores for tracking score changes over time."""
+
+    __tablename__ = "crm_lead_scores"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, index=True
+    )
+    contact_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("contacts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    score: Mapped[int] = mapped_column(Integer, nullable=False)  # 0-100 score
+    score_source: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="manual"
+    )  # ai, rule_based, manual, etc.
+    scoring_factors: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )  # Factors that contributed to the score
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
+    )  # AI agent or rule set that generated the score
+
+    # Relationships
+    contact: Mapped[Contact] = relationship("Contact", back_populates="lead_score_history")
+
+    def __repr__(self) -> str:
+        return f"<LeadScoreHistory contact_id={self.contact_id} score={self.score} source={self.score_source}>"

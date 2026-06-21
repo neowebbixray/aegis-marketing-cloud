@@ -1,15 +1,12 @@
 """
-CRM router: contacts, deals, pipelines, activities.
-
-All list responses use the docs-mandated ``{data, meta, links}`` envelope.
-All single-resource responses use ``{data: {...}}``.
+CRM router: contacts, deals, pipelines, activities, and custom field definitions.
 """
 
 from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_user, get_db, get_tenant_context
@@ -21,21 +18,24 @@ from app.schemas.crm import (
     ContactCreate,
     ContactResponse,
     ContactUpdate,
+    CustomFieldDefinitionCreate,
+    CustomFieldDefinitionResponse,
+    CustomFieldDefinitionUpdate,
     DealCreate,
     DealResponse,
     DealStageChangeRequest,
     DealUpdate,
+    LeadScoreHistoryResponse,
+    LeadScoreUpdate,
     PipelineCreate,
     PipelineResponse,
 )
-from app.services.crm import ActivityService, ContactService, DealService, PipelineService
+from app.services.crm import ActivityService, ContactService, CustomFieldDefinitionService, DealService, PipelineService
 
 router = APIRouter(prefix="/crm", tags=["crm"])
 
 
 # ── Contacts ─────────────────────────────────────────────────────────────────
-
-
 @router.get("/contacts")
 async def list_contacts(
     request: Request,
@@ -161,6 +161,82 @@ async def update_contact(
     return build_single_response(ContactResponse.model_validate(contact))
 
 
+@router.patch("/contacts/{contact_id}/score")
+async def update_contact_lead_score(
+    contact_id: UUID,
+    body: LeadScoreUpdate,
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Update a contact's lead score.
+
+    Returns the docs-mandated ``{data: {...}}`` envelope.
+    """
+    tenant_id = await get_tenant_context(request, current_user=current_user)
+    service = ContactService(db)
+    contact = await service.update_lead_score(
+        contact_id=contact_id,
+        tenant_id=tenant_id,
+        score=body.score,
+        score_source=body.score_source,
+        scoring_factors=body.scoring_factors,
+    )
+    return build_single_response(ContactResponse.model_validate(contact))
+
+
+@router.get("/contacts/{contact_id}/score-history")
+async def get_contact_lead_score_history(
+    contact_id: UUID,
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+) -> dict:
+    """Get lead score history for a contact.
+
+    Returns the docs-mandated ``{data, meta, links}`` envelope.
+    """
+    tenant_id = await get_tenant_context(request, current_user=current_user)
+    service = ContactService(db)
+    
+    # Get lead score history records
+    from sqlalchemy import select, desc
+    from app.models.crm import LeadScoreHistory
+    
+    skip = (page - 1) * limit
+    query = (
+        select(LeadScoreHistory)
+        .where(
+            LeadScoreHistory.contact_id == contact_id,
+            LeadScoreHistory.tenant_id == tenant_id,
+        )
+        .order_by(desc(LeadScoreHistory.created_at))
+        .offset(skip)
+        .limit(limit)
+    )
+    
+    result = await db.execute(query)
+    items = result.scalars().all()
+    
+    # Get total count
+    count_query = select(LeadScoreHistory).where(
+        LeadScoreHistory.contact_id == contact_id,
+        LeadScoreHistory.tenant_id == tenant_id,
+    )
+    count_result = await db.execute(count_query)
+    total = len(count_result.scalars().all())
+    
+    return build_list_response(
+        data=[LeadScoreHistoryResponse.model_validate(item) for item in items],
+        total=total,
+        page=page,
+        per_page=limit,
+        request=request,
+    )
+
+
 @router.delete("/contacts/{contact_id}", status_code=204)
 async def delete_contact(
     contact_id: UUID,
@@ -176,8 +252,6 @@ async def delete_contact(
 
 
 # ── Deals ────────────────────────────────────────────────────────────────────
-
-
 @router.get("/deals")
 async def list_deals(
     request: Request,
@@ -302,8 +376,6 @@ async def delete_deal(
 
 
 # ── Pipelines ────────────────────────────────────────────────────────────────
-
-
 @router.get("/pipelines")
 async def list_pipelines(
     request: Request,
@@ -372,8 +444,6 @@ async def get_pipeline(
 
 
 # ── Activities ───────────────────────────────────────────────────────────────
-
-
 @router.get("/activities")
 async def list_activities(
     request: Request,
@@ -436,3 +506,111 @@ async def get_activity(
     service = ActivityService(db)
     activity = await service.get(activity_id, tenant_id=tenant_id)
     return build_single_response(ActivityResponse.model_validate(activity))
+
+
+# ── Custom Field Definitions ─────────────────────────────────────────────────
+@router.get("/custom-fields")
+async def list_custom_field_definitions(
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+) -> dict:
+    """List custom field definitions in the current workspace.
+
+    Returns the docs-mandated ``{data, meta, links}`` envelope.
+    """
+    tenant_id = await get_tenant_context(request, current_user=current_user)
+    workspace_id = getattr(request.state, "workspace_id", None)
+    skip = (page - 1) * limit
+    service = CustomFieldDefinitionService(db)
+    items, total = await service.list(
+        tenant_id=tenant_id,
+        workspace_id=workspace_id,
+        skip=skip,
+        limit=limit,
+        filters=[service.model.workspace_id == UUID(workspace_id)] if workspace_id else None,
+    )
+    return build_list_response(
+        data=[CustomFieldDefinitionResponse.model_validate(f) for f in items],
+        total=total,
+        page=page,
+        per_page=limit,
+        request=request,
+    )
+
+
+@router.post("/custom-fields", status_code=201)
+async def create_custom_field_definition(
+    body: CustomFieldDefinitionCreate,
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Create a new custom field definition.
+
+    Returns the docs-mandated ``{data: {...}}`` envelope.
+    """
+    tenant_id = await get_tenant_context(request, current_user=current_user)
+    workspace_id = getattr(request.state, "workspace_id", None)
+    service = CustomFieldDefinitionService(db)
+    field_def = await service.create(
+        tenant_id=tenant_id,
+        workspace_id=workspace_id,
+        **body.model_dump(),
+    )
+    return build_single_response(CustomFieldDefinitionResponse.model_validate(field_def))
+
+
+@router.get("/custom-fields/{field_id}")
+async def get_custom_field_definition(
+    field_id: UUID,
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Get a single custom field definition.
+
+    Returns the docs-mandated ``{data: {...}}`` envelope.
+    """
+    tenant_id = await get_tenant_context(request, current_user=current_user)
+    service = CustomFieldDefinitionService(db)
+    field_def = await service.get(field_id, tenant_id=tenant_id)
+    return build_single_response(CustomFieldDefinitionResponse.model_validate(field_def))
+
+
+@router.patch("/custom-fields/{field_id}")
+async def update_custom_field_definition(
+    field_id: UUID,
+    body: CustomFieldDefinitionUpdate,
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Update a custom field definition.
+
+    Returns the docs-mandated ``{data: {...}}`` envelope.
+    """
+    tenant_id = await get_tenant_context(request, current_user=current_user)
+    service = CustomFieldDefinitionService(db)
+    field_def = await service.update(
+        field_id,
+        tenant_id=tenant_id,
+        **body.model_dump(exclude_unset=True),
+    )
+    return build_single_response(CustomFieldDefinitionResponse.model_validate(field_def))
+
+
+@router.delete("/custom-fields/{field_id}", status_code=204)
+async def delete_custom_field_definition(
+    field_id: UUID,
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Soft-delete a custom field definition."""
+    tenant_id = await get_tenant_context(request, current_user=current_user)
+    service = CustomFieldDefinitionService(db)
+    await service.soft_delete(field_id, tenant_id=tenant_id)
+    return None

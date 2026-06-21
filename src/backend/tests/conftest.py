@@ -8,38 +8,24 @@ and authentication header helpers.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator, AsyncIterator
-from typing import Any
-from uuid import UUID
-
 import sys
+from collections.abc import AsyncGenerator, AsyncIterator
+
 import pytest
 
 pytestmark = pytest.mark.skipif(sys.platform.startswith("win"), reason="Skipping backend tests on Windows due to known import issues")
 
 import pytest_asyncio
-from asgi_lifespan import LifespanManager
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-
 from app.config import settings
+from app.core.security import create_access_token, hash_password
 from app.database import Base, get_db
 from app.main import create_app
 from app.models.auth import User
 from app.models.tenant import Role, Tenant, UserRole, Workspace
-from app.core.security import hash_password, create_access_token
+from asgi_lifespan import LifespanManager
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-# ── Test factories ────────────────────────────────────────────────────────────
-from tests.factories.auth import ApiKeyFactory, SessionFactory, UserFactory
-from tests.factories.crm import (
-    ActivityFactory,
-    ContactFactory,
-    DealFactory,
-    PipelineFactory,
-    PipelineStageFactory,
-)
-from tests.factories.marketing import CampaignFactory, EmailTemplateFactory, SegmentFactory
-from tests.factories.tenant import RoleFactory, TenantFactory, UserRoleFactory, WorkspaceFactory
 from tests.factories.ai import AIAgentFactory, ConversationFactory, KnowledgeDocumentFactory
 from tests.factories.analytics import (
     AnalyticsDashboardFactory,
@@ -47,14 +33,26 @@ from tests.factories.analytics import (
     MetricSnapshotFactory,
     ScheduledReportFactory,
 )
+
+# ── Test factories ────────────────────────────────────────────────────────────
+from tests.factories.auth import ApiKeyFactory, SessionFactory, UserFactory
 from tests.factories.billing import (
     CreditWalletFactory,
     InvoiceFactory,
     SubscriptionFactory,
     UsageRecordFactory,
 )
+from tests.factories.crm import (
+    ActivityFactory,
+    ContactFactory,
+    DealFactory,
+    PipelineFactory,
+    PipelineStageFactory,
+)
 from tests.factories.email import EmailCampaignFactory, EmailMessageFactory
+from tests.factories.marketing import CampaignFactory, EmailTemplateFactory, SegmentFactory
 from tests.factories.media import MediaAssetFactory
+from tests.factories.tenant import RoleFactory, TenantFactory, UserRoleFactory, WorkspaceFactory
 from tests.factories.webhooks import WebhookDeliveryFactory, WebhookFactory
 
 # ── Test database ────────────────────────────────────────────────────────────
@@ -127,11 +125,10 @@ async def app():
 async def client(app) -> AsyncIterator[AsyncClient]:
     """Provide an async HTTP client for testing."""
     transport = ASGITransport(app=app)
-    async with LifespanManager(app):
-        async with AsyncClient(
-            transport=transport, base_url="http://testserver"
-        ) as ac:
-            yield ac
+    async with LifespanManager(app), AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as ac:
+        yield ac
 
 
 # ── Sample data factories ────────────────────────────────────────────────────

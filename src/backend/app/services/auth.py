@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -369,14 +369,15 @@ class AuthService:
         if not verify_password(current_password, user.password_hash):
             raise UnauthorizedException(detail="Current password is incorrect")
 
-        # Revoke all existing sessions (force re-login)
+        # Revoke all existing sessions (force re-login on all devices)
         await self.db.execute(
-            select(Session).where(
+            update(Session)
+            .where(
                 Session.user_id == user_id,
                 Session.revoked_at.is_(None),
-            ),
+            )
+            .values(revoked_at=datetime.now(UTC)),
         )
-        # NOTE: In production, batch-update sessions here
 
         user.password_hash = hash_password(new_password)
         await self.db.flush()

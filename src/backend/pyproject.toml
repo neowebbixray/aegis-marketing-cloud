@@ -82,6 +82,78 @@ dev = [
 where = ["."]
 include = ["app*", "tests*"]
 
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "W",    # pycodestyle warnings
+    "UP",   # pyupgrade
+    "ANN",  # annotations
+    "ARG",  # unused arguments
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "DTZ",  # flake8-datetimez
+    "EM",   # flake8-errmsg
+    "G",    # flake8-logging-format
+    "ISC",  # flake8-implicit-str-concat
+    "LOG",  # flake8-logging
+    "NPY",  # NumPy-specific rules
+    "PIE",  # flake8-pie
+    "PT",   # flake8-pytest-style
+    "PTH",  # flake8-use-pathlib
+    "RET",  # flake8-return
+    "RSE",  # flake8-raise
+    "RUF",  # Ruff-specific rules
+    "S",    # flake8-bandit (security)
+    "SIM",  # flake8-simplify
+    "SLF",  # flake8-self
+    "T10",  # flake8-debugger
+    "T20",  # flake8-print
+    "TID",  # flake8-tidy-imports
+    "TRY",  # tryceratops
+    "YTT",  # flake8-2020
+]
+ignore = [
+    "ANN101",  # missing-type-self (redundant with py311)
+    "ANN102",  # missing-type-cls (redundant with py311)
+    "ANN401",  # dynamically typed expressions
+    "S101",    # allow assert in tests
+    "SLF001",  # allow private member access
+    "D",       # pydocstyle (handled separately)
+    "E501",    # line length (handled by formatter)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN", "ARG", "S", "T20"]
+"app/alembic/*" = ["ANN", "ARG", "S", "T20"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+
+[tool.ruff.lint.pytest]
+parametrize-names-type = "csv"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+warn_unused_ignores = true
+no_implicit_reexport = true
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["tests/*"]
+disallow_untyped_defs = false
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

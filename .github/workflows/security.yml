@@ -13,14 +13,14 @@ name: Security Scan
 
 on:
   push:
-    branches: [master, main]
+    branches: [main]
     paths:
       - "src/**"
       - "scripts/**"
       - ".github/workflows/security.yml"
       - "deployment/security/**"
   pull_request:
-    branches: [master, main]
+    branches: [main]
     paths:
       - "src/**"
       - "deployment/security/**"

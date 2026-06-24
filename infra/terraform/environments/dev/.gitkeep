@@ -1,0 +1,2 @@
+# Terraform environments directory
+# Each subdirectory contains environment-specific Terraform configs.

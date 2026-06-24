@@ -1,16 +1,13 @@
-"""
-Pydantic schemas for the billing module: subscriptions, invoices, credit wallets, usage records.
-"""
+"""Pydantic schemas for the billing module: subscriptions, invoices, credit wallets, usage records."""
 
 from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
-
 
 # ── Plan / Tier constants ─────────────────────────────────────────────────────
 
@@ -22,14 +19,16 @@ class SubscriptionCreate(BaseModel):
     """Payload for POST /billing/subscriptions."""
 
     plan_tier: str = Field(..., min_length=1, max_length=50)
-    trial_days: Optional[int] = Field(None, ge=0, le=365)
+    trial_days: int | None = Field(None, ge=0, le=365)
 
     @field_validator("plan_tier")
     @classmethod
     def validate_plan_tier(cls, v: str) -> str:
         lowered = v.lower()
         if lowered not in PLAN_TIERS:
-            raise ValueError(f"Invalid plan tier '{v}'. Must be one of: {', '.join(sorted(PLAN_TIERS))}")
+            raise ValueError(
+                f"Invalid plan tier '{v}'. Must be one of: {', '.join(sorted(PLAN_TIERS))}"
+            )
         return lowered
 
 
@@ -43,7 +42,9 @@ class SubscriptionUpdate(BaseModel):
     def validate_plan_tier(cls, v: str) -> str:
         lowered = v.lower()
         if lowered not in PLAN_TIERS:
-            raise ValueError(f"Invalid plan tier '{v}'. Must be one of: {', '.join(sorted(PLAN_TIERS))}")
+            raise ValueError(
+                f"Invalid plan tier '{v}'. Must be one of: {', '.join(sorted(PLAN_TIERS))}"
+            )
         return lowered
 
 
@@ -60,12 +61,12 @@ class SubscriptionResponse(BaseModel):
     tenant_id: UUID
     plan_id: str
     status: str
-    current_period_start: Optional[datetime] = None
-    current_period_end: Optional[datetime] = None
-    trial_end: Optional[datetime] = None
-    cancelled_at: Optional[datetime] = None
-    payment_provider: Optional[str] = None
-    payment_provider_id: Optional[str] = None
+    current_period_start: datetime | None = None
+    current_period_end: datetime | None = None
+    trial_end: datetime | None = None
+    cancelled_at: datetime | None = None
+    payment_provider: str | None = None
+    payment_provider_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -78,14 +79,14 @@ class InvoiceResponse(BaseModel):
 
     id: UUID
     tenant_id: UUID
-    subscription_id: Optional[UUID] = None
+    subscription_id: UUID | None = None
     invoice_number: str
     amount: Decimal
     currency: str
     status: str
-    paid_at: Optional[datetime] = None
-    line_items: Optional[list[Any]] = None
-    metadata: Optional[dict[str, Any]] = None
+    paid_at: datetime | None = None
+    line_items: list[Any] | None = None
+    metadata: dict[str, Any] | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -96,8 +97,8 @@ class InvoiceResponse(BaseModel):
 class WalletTopUp(BaseModel):
     """Payload for POST /billing/wallet/top-up."""
 
-    amount: Decimal = Field(..., gt=Decimal("0"), decimal_places=2)
-    payment_method: Optional[str] = Field(None, max_length=64)
+    amount: Decimal = Field(..., gt=Decimal(0), decimal_places=2)
+    payment_method: str | None = Field(None, max_length=64)
 
 
 class WalletResponse(BaseModel):
@@ -123,7 +124,7 @@ class UsageRecordResponse(BaseModel):
     metric: str
     quantity: Decimal
     recorded_at: datetime
-    metadata: Optional[dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
     model_config = {"from_attributes": True}
 
@@ -145,7 +146,7 @@ class PaymentHistoryResponse(BaseModel):
     amount: Decimal
     currency: str
     status: str
-    paid_at: Optional[datetime] = None
+    paid_at: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

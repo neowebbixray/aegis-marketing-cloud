@@ -1,5 +1,4 @@
-"""
-Webhook router: registration, delivery management, event catalog, and secret rotation.
+"""Webhook router: registration, delivery management, event catalog, and secret rotation.
 
 All endpoints (except the event catalog) require an authenticated active user and
 tenant context.  Responses use the standard ``{data, meta, links}`` envelope for
@@ -16,7 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_user, get_db, get_tenant_context
 from app.models.auth import User
-from app.models.webhooks import Webhook
 from app.schemas.base import build_list_response, build_single_response
 from app.schemas.webhooks import (
     WebhookCreate,
@@ -243,7 +241,7 @@ async def send_test_event(
         WebhookTestResponse(
             delivery_id=delivery_ids[0],
             status="sent",
-        ).model_dump()
+        ).model_dump(),
     )
 
 
@@ -270,7 +268,7 @@ async def rotate_secret(
             id=webhook_id,
             message="Secret rotated successfully. The new secret is shown once.",
         ).model_dump()
-        | {"secret": result["secret"]}
+        | {"secret": result["secret"]},
     )
 
 
@@ -327,7 +325,7 @@ async def get_delivery_detail(
     # Verify webhook belongs to tenant
     await service.get_webhook(webhook_id, tenant_id)
     # Fetch delivery
-    items, total = await service.get_delivery_logs(
+    items, _total = await service.get_delivery_logs(
         webhook_id=webhook_id,
         tenant_id=tenant_id,
         page=1,
@@ -364,7 +362,7 @@ async def redeliver_webhook(
 
     Returns the docs-mandated ``{data: {...}}`` envelope.
     """
-    tenant_id = await get_tenant_context(request)
+    await get_tenant_context(request)
     service = WebhookService(db)
     delivery = await service.process_delivery(webhook_id, delivery_id)
     return build_single_response(WebhookDeliveryResponse.model_validate(delivery))

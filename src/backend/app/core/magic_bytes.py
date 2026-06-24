@@ -1,5 +1,4 @@
-"""
-Magic byte signatures database for file type detection.
+"""Magic byte signatures database for file type detection.
 
 Provides functions to detect MIME types from raw byte prefixes, map MIME types
 to file categories, and verify that a file's extension matches its true content.
@@ -9,10 +8,9 @@ from __future__ import annotations
 
 import enum
 import os
-from typing import Optional
 
 
-class FileCategory(str, enum.Enum):
+class FileCategory(enum.StrEnum):
     """Categorisation of files based on MIME type group."""
 
     IMAGE = "image"
@@ -123,7 +121,8 @@ def detect_mime_type(file_bytes: bytes) -> str | None:
 
     # Sort signatures: longer prefixes first for most-specific match
     for prefix, mime, _desc in sorted(
-        FILE_SIGNATURES, key=lambda x: -len(x[0])
+        FILE_SIGNATURES,
+        key=lambda x: -len(x[0]),
     ):
         if file_bytes.startswith(prefix):
             # Run extra checks if available for this prefix
@@ -159,8 +158,9 @@ def get_file_category(mime_type: str) -> FileCategory:
     Returns:
         The corresponding :class:`FileCategory` enum member.
         Falls back to ``OTHER`` for unrecognised types.
+
     """
-    major = mime_type.split("/")[0] if "/" in mime_type else ""
+    major = mime_type.split("/", maxsplit=1)[0] if "/" in mime_type else ""
     mime_lower = mime_type.lower()
 
     if major == "image":
@@ -221,6 +221,7 @@ def verify_extension(filename: str, detected_mime: str) -> bool:
 
     Returns:
         ``True`` if the extension is consistent with the detected MIME type.
+
     """
     if not detected_mime:
         return True  # can't verify, don't reject
@@ -244,11 +245,8 @@ def verify_extension(filename: str, detected_mime: str) -> bool:
     # Relaxed matching: if both are text/* subtypes, allow it
     # (e.g. .csv -> text/csv, magic -> text/plain)
     guessed_major = guessed.split("/")[0] if "/" in guessed else ""
-    detected_major = detected_mime.split("/")[0] if "/" in detected_mime else ""
-    if guessed_major == "text" and detected_major == "text":
-        return True
-
-    return False
+    detected_major = detected_mime.split("/", maxsplit=1)[0] if "/" in detected_mime else ""
+    return bool(guessed_major == "text" and detected_major == "text")
 
 
 def _ensure_mimetypes(mimetypes_module) -> None:

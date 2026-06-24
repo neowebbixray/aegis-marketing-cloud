@@ -1,5 +1,4 @@
-"""
-Celery tasks for async knowledge document indexing.
+"""Celery tasks for async knowledge document indexing.
 
 These tasks are optional — if Celery is not running, callers can invoke
 ``KnowledgeService.index_document`` directly.
@@ -65,7 +64,7 @@ if CELERY_AVAILABLE and celery_app is not None:
                 document_id,
                 exc,
             )
-            raise self.retry(exc=exc)
+            raise self.retry(exc=exc) from exc
 
     @celery_app.task(bind=True, max_retries=2, default_retry_delay=60)
     def bulk_index_task(
@@ -91,7 +90,7 @@ if CELERY_AVAILABLE and celery_app is not None:
                         "chunks_indexed": 0,
                         "is_indexed": False,
                         "error": str(exc),
-                    }
+                    },
                 )
         return results
 
@@ -122,6 +121,6 @@ else:
                         "chunks_indexed": 0,
                         "is_indexed": False,
                         "error": str(exc),
-                    }
+                    },
                 )
         return results

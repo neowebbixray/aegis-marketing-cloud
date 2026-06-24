@@ -1,5 +1,4 @@
-"""
-WebSocket endpoint for real-time notifications and events.
+"""WebSocket endpoint for real-time notifications and events.
 
 Supports:
 - JWT token authentication via ``?token=`` query parameter.
@@ -29,14 +28,14 @@ Usage (client side)::
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.core.exceptions import UnauthorizedException
 from app.core.websocket import ConnectionManager, connection_manager
 from app.schemas.notifications import (
     WebSocketMessage,
@@ -83,7 +82,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     await manager.connect(websocket, user_id, workspace_id)
 
     # Send a welcome / connected message
-    try:
+    with contextlib.suppress(Exception):
         await _send_message(
             websocket,
             WebSocketMessageType.CONNECTED,
@@ -94,8 +93,6 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 "active_connections": await manager.get_user_connections(user_id),
             },
         )
-    except Exception:
-        pass
 
     logger.info(
         "WebSocket client connected: user=%s tenant=%s workspace=%s",
@@ -116,18 +113,18 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 continue
 
             msg_type = data.get("type", "")
-            msg_payload = data.get("payload", {})
+            data.get("payload", {})
 
             if msg_type == "heartbeat_ack":
                 # Client responded to our heartbeat — nothing to do
                 continue
 
-            elif msg_type == "heartbeat":
+            if msg_type == "heartbeat":
                 # Client-initiated heartbeat (request a pong)
                 await _send_message(
                     websocket,
                     WebSocketMessageType.HEARTBEAT_ACK,
-                    {"timestamp": datetime.now(timezone.utc).isoformat()},
+                    {"timestamp": datetime.now(UTC).isoformat()},
                 )
 
             elif msg_type == "typing":
@@ -137,7 +134,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             elif msg_type == "status_update":
                 # Broadcast status change to workspace
                 await _handle_status_update(
-                    manager, data, user_id, workspace_id
+                    manager,
+                    data,
+                    user_id,
+                    workspace_id,
                 )
 
             elif msg_type == "ping":
@@ -155,7 +155,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     user_id,
                 )
                 await _send_error(
-                    websocket, f"Unknown message type: {msg_type}"
+                    websocket,
+                    f"Unknown message type: {msg_type}",
                 )
 
     except WebSocketDisconnect:
@@ -185,10 +186,11 @@ async def _send_message(
 ) -> None:
     """Send a JSON-encoded WebSocket message to a single client."""
     msg = WebSocketMessage(
-        type=msg_type if isinstance(msg_type, WebSocketMessageType)
+        type=msg_type
+        if isinstance(msg_type, WebSocketMessageType)
         else WebSocketMessageType(msg_type),
         payload=payload,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         notification_id=notification_id,
     )
     await websocket.send_text(msg.model_dump_json())
@@ -218,7 +220,7 @@ async def _handle_typing(
             "is_typing": data.get("payload", {}).get("is_typing", True),
             "thread_id": data.get("payload", {}).get("thread_id"),
         },
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
     if workspace_id:
         await manager.broadcast_to_workspace(workspace_id, typing_msg)
@@ -240,7 +242,7 @@ async def _handle_status_update(
             "status": data.get("payload", {}).get("status", "online"),
             "status_message": data.get("payload", {}).get("status_message"),
         },
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
     if workspace_id:
         await manager.broadcast_to_workspace(workspace_id, status_msg)

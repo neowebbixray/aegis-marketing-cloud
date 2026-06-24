@@ -3,6 +3,7 @@
 Tenant-scoped: AI agents and knowledge are shared within a tenant.
 Conversations are workspace-scoped.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -45,7 +46,9 @@ class AIAgentExecution(BaseModel):
 
     __tablename__ = "ai_agent_executions"
 
-    agent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("ai_agents.id", ondelete="CASCADE"), nullable=False)
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("ai_agents.id", ondelete="CASCADE"), nullable=False
+    )
     tenant_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
     session_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     input: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
@@ -73,7 +76,9 @@ class KnowledgeDocument(BaseModel):
     source: Mapped[str | None] = mapped_column(String(100), nullable=True)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     tags: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True, default=list)
-    meta_data: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True, default=dict)
+    meta_data: Mapped[dict[str, Any] | None] = mapped_column(
+        "metadata", JSONB, nullable=True, default=dict
+    )
     embedding_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     chunk_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_indexed: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -89,15 +94,20 @@ class Conversation(BaseModel):
     __tablename__ = "conversations"
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    agent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("ai_agents.id", ondelete="SET NULL"), nullable=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ai_agents.id", ondelete="SET NULL"), nullable=True
+    )
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     context: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True, default=dict)
     message_count: Mapped[int] = mapped_column(Integer, default=0)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    messages: Mapped[list["Message"]] = relationship(
-        back_populates="conversation", cascade="all, delete-orphan"
+    messages: Mapped[list[Message]] = relationship(
+        back_populates="conversation",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:
@@ -110,15 +120,18 @@ class Message(BaseModel):
     __tablename__ = "messages"
 
     conversation_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
     )
     role: Mapped[str] = mapped_column(String(50), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     tool_calls: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True, default=list)
     tool_call_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    meta_data: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True, default=dict)
+    meta_data: Mapped[dict[str, Any] | None] = mapped_column(
+        "metadata", JSONB, nullable=True, default=dict
+    )
 
-    conversation: Mapped["Conversation"] = relationship(back_populates="messages")
+    conversation: Mapped[Conversation] = relationship(back_populates="messages")
 
     def __repr__(self) -> str:
         return f"<Message {self.role}:{len(self.content)}>"

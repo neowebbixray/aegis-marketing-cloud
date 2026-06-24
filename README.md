@@ -37,47 +37,59 @@
 ## Quick Start
 
 ```bash
-# Prerequisites: Docker + Docker Compose
+# Prerequisites: Docker + Docker Compose, Python 3.11+, uv
 
 # Clone & enter
 git clone https://github.com/nousresearch/aegis-marketing-cloud.git
 cd aegis-marketing-cloud
 
-# Configure environment
-cp .env.example .env
+# Set up Python venv and install deps
+make venv env
 
-# Windows test runner (optional on Windows CI)
-./scripts/run_tests_windows.sh
+# Start infrastructure (Postgres, Redis — lightweight dev profile)
+make up-db
+
+# Apply database migrations
+make migrate
+
+# Seed development data (roles, demo contacts, deals, pipelines)
+make seed
 
 # Start the full stack
-docker compose -f deployment/docker-compose.yml up -d
-
-# Run database migrations
-docker compose -f deployment/docker-compose.yml exec backend alembic upgrade head
+make dev
 
 # Open in browser
 open http://localhost:3000
-
-# (Optional) Start Vault for secret management:
-# docker compose -f infra/compose/vault/docker-compose.yml up -d
 ```
 
-## Services
+### Docker Compose (alternative)
 
-| Service | Port | Description |
-|---------|------|-------------|
-| Frontend | `3000` | Next.js 14 application |
-| Backend API | `8000` | FastAPI + GraphQL |
-| PostgreSQL | `5432` | Primary database |
-| Redis | `6379` | Cache & session store |
-| RabbitMQ | `5672` / `15672` | Message broker |
-| Qdrant | `6333` / `6334` | Vector database |
-| MinIO | `9000` / `9001` | S3-compatible storage |
-| n8n | `5678` | Workflow automation |
-| Prometheus | `9090` | Metrics collection |
-| Grafana | `3000` | Monitoring dashboards |
-| Loki | `3100` | Log aggregation |
-| Mailpit | `1025` / `8025` | Dev email catcher |
+```bash
+# Full stack (all services)
+docker compose up -d
+
+# Dev overlay (lightweight — only DB + cache, with migration auto-run)
+docker compose -f docker-compose.yml -f docker-compose.override.yml up -d
+
+# The override is auto-merged when you run `docker compose up` from the project root
+```
+
+### Services
+
+| Service | Port    | Description                   |
+|---------|---------|-------------------------------|
+| Frontend| `:3000` | Next.js 14 application        |
+| Backend | `:8000` | FastAPI + GraphQL             |
+| PostgreSQL | `:5432` | Primary database            |
+| Redis   | `:6379` | Cache & session store         |
+| RabbitMQ| `:5672`/`:15672` | Message broker       |
+| Qdrant  | `:6333`/`:6334` | Vector database        |
+| MinIO   | `:9000`/`:9001` | S3-compatible storage     |
+| n8n     | `:5678` | Workflow automation           |
+| Prometheus | `:9090` | Metrics collection         |
+| Grafana | `:3000` | Monitoring dashboards         |
+| Loki    | `:3100` | Log aggregation               |
+| Mailpit | `:1025`/`:8025` | Dev email catcher        |
 
 ## Documentation
 

@@ -1,5 +1,4 @@
-"""
-Webhook service: event catalog, registration, delivery with retry & dedup,
+"""Webhook service: event catalog, registration, delivery with retry & dedup,
 signature verification, secret management, and cleanup.
 
 All tenant-scoped operations require a ``tenant_id`` UUID.
@@ -12,8 +11,8 @@ import hmac
 import json
 import logging
 import time
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID, uuid4
 
 import httpx
@@ -30,7 +29,6 @@ from app.schemas.webhooks import (
     DEFAULT_RETRY_CONFIG,
     WEBHOOK_EVENT_CATALOG,
     DeliveryStatus,
-    WebhookEventType,
 )
 
 logger = logging.getLogger("amc.services.webhooks")
@@ -69,6 +67,7 @@ def verify_signature(payload: str, signature: str, secret: str) -> bool:
 
     Returns:
         ``True`` if the signature is valid, ``False`` otherwise.
+
     """
     try:
         version, sig_value = signature.split(",", 1)
@@ -100,11 +99,13 @@ def _get_retry_config(webhook: Webhook) -> dict[str, Any]:
     return {
         "max_retries": config.get("max_retries", DEFAULT_MAX_RETRIES),
         "initial_interval_seconds": config.get(
-            "initial_interval_seconds", DEFAULT_INITIAL_INTERVAL
+            "initial_interval_seconds",
+            DEFAULT_INITIAL_INTERVAL,
         ),
         "multiplier": config.get("multiplier", DEFAULT_MULTIPLIER),
         "max_interval_seconds": config.get(
-            "max_interval_seconds", DEFAULT_MAX_INTERVAL
+            "max_interval_seconds",
+            DEFAULT_MAX_INTERVAL,
         ),
     }
 
@@ -151,13 +152,14 @@ class WebhookService:
         Raises:
             ValidationException: If the URL already exists for this tenant,
                 or if an invalid event type is specified.
+
         """
         # Validate event types against catalog
         valid_events = set(WEBHOOK_EVENT_CATALOG.keys())
         for event in events:
             if event not in valid_events:
                 raise ValidationException(
-                    detail=f"Unknown event type '{event}'. See /webhooks/events for valid types."
+                    detail=f"Unknown event type '{event}'. See /webhooks/events for valid types.",
                 )
 
         # Check for duplicate URL
@@ -167,12 +169,12 @@ class WebhookService:
                     Webhook.tenant_id == tenant_id,
                     Webhook.url == url,
                     Webhook.deleted_at.is_(None),
-                )
-            )
+                ),
+            ),
         )
         if existing.scalar_one_or_none():
             raise ConflictException(
-                detail=f"A webhook with URL '{url}' already exists for this tenant."
+                detail=f"A webhook with URL '{url}' already exists for this tenant.",
             )
 
         secret_hash = None
@@ -281,7 +283,9 @@ class WebhookService:
     # ── Secret Management ─────────────────────────────────────────────────────
 
     async def rotate_secret(
-        self, webhook_id: UUID, tenant_id: UUID
+        self,
+        webhook_id: UUID,
+        tenant_id: UUID,
     ) -> dict[str, str]:
         """Rotate the webhook signing secret.
 
@@ -314,6 +318,7 @@ class WebhookService:
 
         Returns:
             List of delivery record IDs created.
+
         """
         delivery_ids: list[UUID] = []
 
@@ -324,14 +329,16 @@ class WebhookService:
                 Webhook.is_active.is_(True),
                 Webhook.deleted_at.is_(None),
                 Webhook.events.contains([event_type]),
-            )
+            ),
         )
         result = await self.db.execute(stmt)
         webhooks = list(result.scalars().all())
 
         if not webhooks:
             logger.debug(
-                "No active webhooks for event %s on tenant %s", event_type, tenant_id
+                "No active webhooks for event %s on tenant %s",
+                event_type,
+                tenant_id,
             )
             return delivery_ids
 
@@ -397,7 +404,7 @@ class WebhookService:
 
             if 200 <= response.status_code < 300:
                 delivery.status = DeliveryStatus.SUCCEEDED.value
-                delivery.completed_at = datetime.now(timezone.utc)
+                delivery.completed_at = datetime.now(UTC)
                 logger.info(
                     "Webhook %s delivery %s succeeded (%d) in %dms",
                     webhook.id,
@@ -423,14 +430,16 @@ class WebhookService:
         await self.db.flush()
 
     async def _handle_failed_delivery(
-        self, webhook: Webhook, delivery: WebhookDelivery
+        self,
+        webhook: Webhook,
+        delivery: WebhookDelivery,
     ) -> None:
         """Handle a failed delivery attempt — schedule retry or mark as failed."""
         retry_config = _get_retry_config(webhook)
 
         if delivery.attempt >= retry_config["max_retries"]:
             delivery.status = DeliveryStatus.FAILED.value
-            delivery.completed_at = datetime.now(timezone.utc)
+            delivery.completed_at = datetime.now(UTC)
             logger.warning(
                 "Webhook %s delivery %s failed permanently after %d attempts",
                 webhook.id,
@@ -445,8 +454,8 @@ class WebhookService:
                 multiplier=retry_config["multiplier"],
                 max_interval=retry_config["max_interval_seconds"],
             )
-            delivery.next_retry_at = datetime.now(timezone.utc) + timedelta(
-                seconds=delay
+            delivery.next_retry_at = datetime.now(UTC) + timedelta(
+                seconds=delay,
             )
             logger.info(
                 "Webhook %s delivery %s will retry in %ds (attempt %d)",
@@ -457,7 +466,9 @@ class WebhookService:
             )
 
     async def process_delivery(
-        self, webhook_id: UUID, delivery_id: UUID
+        self,
+        webhook_id: UUID,
+        delivery_id: UUID,
     ) -> WebhookDelivery:
         """Process (or retry) a specific delivery.
 
@@ -469,6 +480,7 @@ class WebhookService:
 
         Returns:
             The updated ``WebhookDelivery`` record.
+
         """
         webhook = await self._get_webhook(webhook_id)
         delivery = await self.db.get(WebhookDelivery, delivery_id)
@@ -476,7 +488,7 @@ class WebhookService:
             raise NotFoundException(detail=f"Delivery {delivery_id} not found")
         if delivery.status in (DeliveryStatus.SUCCEEDED.value, DeliveryStatus.CANCELLED.value):
             raise ConflictException(
-                detail=f"Delivery {delivery_id} is already in '{delivery.status}' state"
+                detail=f"Delivery {delivery_id} is already in '{delivery.status}' state",
             )
 
         payload_str = delivery.request_body or "{}"
@@ -505,11 +517,7 @@ class WebhookService:
 
         offset = (page - 1) * per_page
 
-        count_stmt = (
-            select(func.count())
-            .select_from(WebhookDelivery)
-            .where(and_(*conditions))
-        )
+        count_stmt = select(func.count()).select_from(WebhookDelivery).where(and_(*conditions))
         count_result = await self.db.execute(count_stmt)
         total = count_result.scalar() or 0
 
@@ -534,15 +542,16 @@ class WebhookService:
 
         Returns:
             Number of webhooks cleaned up.
+
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
 
         # Find stale webhooks (soft-deleted or never activated)
         stmt = select(Webhook).where(
             and_(
                 Webhook.deleted_at.isnot(None),
                 Webhook.deleted_at < cutoff,
-            )
+            ),
         )
         result = await self.db.execute(stmt)
         stale_webhooks = list(result.scalars().all())
@@ -551,7 +560,7 @@ class WebhookService:
         for webhook in stale_webhooks:
             # Delete delivery records too
             del_stmt = select(WebhookDelivery).where(
-                WebhookDelivery.webhook_id == webhook.id
+                WebhookDelivery.webhook_id == webhook.id,
             )
             del_result = await self.db.execute(del_stmt)
             for d in del_result.scalars().all():
@@ -569,7 +578,9 @@ class WebhookService:
     # ── Internal helpers ──────────────────────────────────────────────────────
 
     async def _get_webhook(
-        self, webhook_id: UUID, tenant_id: UUID | None = None
+        self,
+        webhook_id: UUID,
+        tenant_id: UUID | None = None,
     ) -> Webhook:
         """Fetch a webhook by ID, optionally scoped to a tenant."""
         conditions = [Webhook.id == webhook_id, Webhook.deleted_at.is_(None)]
@@ -603,18 +614,21 @@ class WebhookService:
 
         Returns:
             List of delivery IDs that were retried.
+
         """
-        webhook = await self._get_webhook(webhook_id, tenant_id)
+        await self._get_webhook(webhook_id, tenant_id)
         retried: list[UUID] = []
 
         stmt = select(WebhookDelivery).where(
             and_(
                 WebhookDelivery.webhook_id == webhook_id,
-                WebhookDelivery.status.in_([
-                    DeliveryStatus.FAILED.value,
-                    DeliveryStatus.RETRYING.value,
-                ]),
-            )
+                WebhookDelivery.status.in_(
+                    [
+                        DeliveryStatus.FAILED.value,
+                        DeliveryStatus.RETRYING.value,
+                    ]
+                ),
+            ),
         )
         result = await self.db.execute(stmt)
         deliveries = list(result.scalars().all())

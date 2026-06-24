@@ -1,5 +1,4 @@
-"""
-Analytics router: event tracking, metrics querying, dashboards, reports,
+"""Analytics router: event tracking, metrics querying, dashboards, reports,
 and legacy campaign/funnel analytics.
 
 All list responses use the docs-mandated ``{data, meta, links}`` envelope.
@@ -8,36 +7,27 @@ All single-resource responses use ``{data: {...}}``.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_user, get_db, get_tenant_context
-from app.core.exceptions import NotFoundException, ValidationException
 from app.models.auth import User
-from app.models.analytics import Dashboard, ScheduledReport
 from app.schemas.analytics import (
-    CampaignAnalyticsResponse,
     DashboardCreate,
     DashboardResponse,
     DashboardUpdate,
     EventCreate,
     EventResponse,
-    FunnelAnalyticsResponse,
-    ReportCreate,
-    ReportGenerateResponse,
     ReportResponse,
-    ReportUpdate,
     ScheduleReportRequest,
 )
 from app.schemas.base import build_list_response, build_single_response
 from app.services.analytics import (
     AnalyticsService,
     CampaignAnalyticsService,
-    DashboardService,
     FunnelAnalyticsService,
     ReportService,
 )
@@ -48,6 +38,7 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 # ═══════════════════════════════════════════════════════════════════════════════
 # Event Tracking
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 @router.post("/events", status_code=201)
 async def track_event(
@@ -78,15 +69,18 @@ async def track_events_batch(
     tenant_id = await get_tenant_context(request, current_user=current_user)
     service = AnalyticsService(db)
     events = await service.track_events_bulk(tenant_id=tenant_id, events=body)
-    return build_single_response({
-        "ingested": len(events),
-        "events": [EventResponse.model_validate(e).model_dump() for e in events],
-    })
+    return build_single_response(
+        {
+            "ingested": len(events),
+            "events": [EventResponse.model_validate(e).model_dump() for e in events],
+        }
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Metrics Querying
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 @router.get("/metrics/query")
 async def query_metrics(
@@ -142,8 +136,8 @@ async def get_events_summary(
 ) -> dict:
     """Get event count summaries grouped by event name."""
     tenant_id = await get_tenant_context(request, current_user=current_user)
-    now = datetime.now(timezone.utc)
-    start = start_date or datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+    now = datetime.now(UTC)
+    start = start_date or datetime(now.year, now.month, 1, tzinfo=UTC)
     end = end_date or now
 
     service = AnalyticsService(db)
@@ -152,7 +146,9 @@ async def get_events_summary(
         start_date=start,
         end_date=end,
     )
-    return build_single_response({"start": start.isoformat(), "end": end.isoformat(), "events": data})
+    return build_single_response(
+        {"start": start.isoformat(), "end": end.isoformat(), "events": data}
+    )
 
 
 @router.get("/metrics/top-entities")
@@ -175,6 +171,7 @@ async def get_top_entities(
     )
     return build_single_response({"entity_type": entity_type, "metric": metric, "top": data})
 
+
 # ── AI Usage Metrics ───────────────────────────────────────────────────────────
 @router.get("/metrics/ai-usage")
 async def get_ai_usage(
@@ -189,6 +186,7 @@ async def get_ai_usage(
     tenant_id = await get_tenant_context(request, current_user=current_user)
     # Simple aggregation query – use SQLAlchemy core for performance.
     from sqlalchemy import func, select
+
     from app.models.ai import AIAgentExecution
 
     stmt = select(
@@ -198,16 +196,19 @@ async def get_ai_usage(
     ).where(AIAgentExecution.tenant_id == tenant_id)
     result = await db.execute(stmt)
     exec_count, total_tokens, total_cost = result.one()
-    return build_single_response({
-        "executions": exec_count,
-        "total_tokens": total_tokens,
-        "total_cost": float(total_cost),
-    })
+    return build_single_response(
+        {
+            "executions": exec_count,
+            "total_tokens": total_tokens,
+            "total_cost": float(total_cost),
+        }
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Dashboards
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 @router.get("/dashboards")
 async def list_dashboards(
@@ -298,7 +299,9 @@ async def update_dashboard(
     service = AnalyticsService(db)
     updates = body.model_dump(exclude_unset=True)
     if "widgets" in updates and updates["widgets"] is not None:
-        updates["widgets"] = [w.model_dump() if hasattr(w, "model_dump") else w for w in updates["widgets"]]
+        updates["widgets"] = [
+            w.model_dump() if hasattr(w, "model_dump") else w for w in updates["widgets"]
+        ]
     dashboard = await service.update_dashboard(
         dashboard_id=dashboard_id,
         tenant_id=tenant_id,
@@ -321,12 +324,12 @@ async def delete_dashboard(
         dashboard_id=dashboard_id,
         tenant_id=tenant_id,
     )
-    return None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Reports
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 @router.get("/reports")
 async def list_reports(
@@ -405,6 +408,7 @@ async def schedule_report(
 # ═══════════════════════════════════════════════════════════════════════════════
 # Legacy Campaign & Funnel Analytics (kept for backwards compatibility)
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 @router.get("/campaigns/{campaign_id}")
 async def get_campaign_analytics(

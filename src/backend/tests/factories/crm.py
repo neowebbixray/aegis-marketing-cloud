@@ -1,5 +1,4 @@
-"""
-Factory classes for CRM models:
+"""Factory classes for CRM models:
 Contact, Deal, Pipeline, PipelineStage, Activity.
 """
 
@@ -28,10 +27,15 @@ class PipelineFactory(BaseFactory):
 
     tenant_id = factory.LazyFunction(uuid.uuid4)
     workspace_id = factory.LazyFunction(uuid.uuid4)
-    name = factory.Iterator([
-        "Sales Pipeline", "Lead Funnel", "Qualification Pipeline",
-        "Enterprise Sales", "Onboarding Pipeline",
-    ])
+    name = factory.Iterator(
+        [
+            "Sales Pipeline",
+            "Lead Funnel",
+            "Qualification Pipeline",
+            "Enterprise Sales",
+            "Onboarding Pipeline",
+        ]
+    )
     description = factory.Faker("sentence", nb_words=6)
     is_default = False
 
@@ -46,13 +50,22 @@ class PipelineStageFactory(BaseFactory):
         model = PipelineStage
 
     pipeline_id = factory.LazyFunction(uuid.uuid4)
-    name = factory.Iterator([
-        "New Lead", "Qualified", "Proposal", "Negotiation",
-        "Closed Won", "Closed Lost",
-    ])
+    name = factory.Iterator(
+        [
+            "New Lead",
+            "Qualified",
+            "Proposal",
+            "Negotiation",
+            "Closed Won",
+            "Closed Lost",
+        ]
+    )
     order = factory.Sequence(lambda n: n)
     probability = factory.Faker(
-        "pyfloat", min_value=0, max_value=100, right_digits=0
+        "pyfloat",
+        min_value=0,
+        max_value=100,
+        right_digits=0,
     )
     colour = factory.Iterator(["#EF4444", "#F59E0B", "#10B981", "#3B82F6", "#8B5CF6"])
 
@@ -68,17 +81,29 @@ class ContactFactory(BaseFactory):
     first_name = factory.Faker("first_name")
     last_name = factory.Faker("last_name")
     email = factory.LazyAttribute(
-        lambda o: f"{o.first_name.lower()}.{o.last_name.lower()}@example.com"
+        lambda o: f"{o.first_name.lower()}.{o.last_name.lower()}@example.com",
     )
     phone = factory.Faker("phone_number")
     company = factory.Faker("company")
     position = factory.Faker("job")
-    lifecycle_stage = factory.Iterator([
-        "lead", "qualified", "opportunity", "customer", "churned",
-    ])
-    source = factory.Iterator([
-        "website", "referral", "advertisement", "email", "event",
-    ])
+    lifecycle_stage = factory.Iterator(
+        [
+            "lead",
+            "qualified",
+            "opportunity",
+            "customer",
+            "churned",
+        ]
+    )
+    source = factory.Iterator(
+        [
+            "website",
+            "referral",
+            "advertisement",
+            "email",
+            "event",
+        ]
+    )
     custom_fields = factory.Dict({"industry": "Technology"})
     tags = factory.List(["prospect", "new"])
     owner_id = None
@@ -97,7 +122,10 @@ class DealFactory(BaseFactory):
     workspace_id = factory.LazyFunction(uuid.uuid4)
     name = factory.Faker("catch_phrase")
     value = factory.Faker(
-        "pydecimal", left_digits=6, right_digits=2, positive=True
+        "pydecimal",
+        left_digits=6,
+        right_digits=2,
+        positive=True,
     )
     currency = "USD"
     pipeline_stage_id = factory.LazyFunction(uuid.uuid4)
@@ -105,7 +133,10 @@ class DealFactory(BaseFactory):
     organization_label = factory.Faker("company")
     owner_id = None
     probability = factory.Faker(
-        "pyfloat", min_value=0, max_value=100, right_digits=0
+        "pyfloat",
+        min_value=0,
+        max_value=100,
+        right_digits=0,
     )
     expected_close_date = factory.Faker("future_date")
     custom_fields = factory.Dict({})

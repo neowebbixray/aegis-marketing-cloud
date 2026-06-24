@@ -1,11 +1,8 @@
-"""
-Auth router: registration, login, token refresh, profile, API keys, SSO.
-"""
+"""Auth router: registration, login, token refresh, profile, API keys, SSO."""
 
 from __future__ import annotations
 
 import uuid
-from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,7 +25,6 @@ from app.schemas.auth import (
 )
 from app.schemas.sso import (
     SAMLLoginResponse,
-    SSOCallbackRequest,
     SSOInitiateResponse,
     SSOProviderListResponse,
     SSOProviderResponse,
@@ -99,7 +95,7 @@ async def logout(
     """Logout the current user (client should discard tokens)."""
     # In a full implementation, this would revoke the current session.
     # For now, token invalidation is handled client-side or via refresh rotation.
-    return None
+    return
 
 
 @router.get("/me", response_model=UserResponse)
@@ -138,7 +134,6 @@ async def change_password(
         current_password=body.current_password,
         new_password=body.new_password,
     )
-    return None
 
 
 @router.get("/api-keys", response_model=list[ApiKeyResponse])
@@ -191,7 +186,6 @@ async def revoke_api_key(
 
     service = AuthService(db)
     await service.revoke_api_key(api_key_id=UUID(key_id), user_id=current_user.id)
-    return None
 
 
 # ── JWKS (public key distribution) ──────────────────────────────────────────
@@ -223,9 +217,8 @@ async def list_sso_providers() -> SSOProviderListResponse:
     providers = get_configured_providers()
     return SSOProviderListResponse(
         providers=[
-            SSOProviderResponse(name=name, label=label)
-            for name, label in providers.items()
-        ]
+            SSOProviderResponse(name=name, label=label) for name, label in providers.items()
+        ],
     )
 
 

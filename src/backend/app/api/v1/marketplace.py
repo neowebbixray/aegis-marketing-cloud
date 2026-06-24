@@ -1,5 +1,4 @@
-"""
-Marketplace router: plugin/extension listings, installation management,
+"""Marketplace router: plugin/extension listings, installation management,
 billing integration, review system.
 
 All list responses use the docs-mandated ``{data, meta, links}`` envelope.
@@ -17,10 +16,7 @@ from app.api.deps import get_current_active_user, get_db, get_tenant_context
 from app.models.auth import User
 from app.schemas.base import build_list_response, build_single_response
 from app.schemas.marketplace import (
-    ListingResponse,
     ReviewCreate,
-    ReviewResponse,
-    InstallationResponse,
 )
 from app.services.marketplace import (
     InstallationService,
@@ -172,7 +168,8 @@ async def get_installation(
     tenant_id = await get_tenant_context(request, current_user=current_user)
     service = InstallationService(db)
     installation = await service.get_installation(
-        installation_id, tenant_id=tenant_id,
+        installation_id,
+        tenant_id=tenant_id,
     )
     return build_single_response(installation)
 
@@ -192,7 +189,9 @@ async def toggle_installation(
     tenant_id = await get_tenant_context(request, current_user=current_user)
     service = InstallationService(db)
     result = await service.toggle_status(
-        installation_id, tenant_id=tenant_id, active=active,
+        installation_id,
+        tenant_id=tenant_id,
+        active=active,
     )
     return build_single_response(result)
 
@@ -208,7 +207,6 @@ async def uninstall_plugin(
     tenant_id = await get_tenant_context(request, current_user=current_user)
     service = InstallationService(db)
     await service.uninstall(installation_id, tenant_id=tenant_id)
-    return None
 
 
 # ── Reviews ─────────────────────────────────────────────────────────────────

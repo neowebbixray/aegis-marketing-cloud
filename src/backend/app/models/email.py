@@ -3,6 +3,7 @@
 All models are multi-tenant (tenant_id + workspace_id) and include
 open/click tracking, bounce handling, and delivery status history.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -10,7 +11,8 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import BaseModel, SoftDeleteMixin
@@ -42,7 +44,10 @@ class EmailCampaign(BaseModel, SoftDeleteMixin):
     subject_override: Mapped[str | None] = mapped_column(String(998), nullable=True)
 
     status: Mapped[str] = mapped_column(
-        String(50), default="draft", nullable=False, index=True
+        String(50),
+        default="draft",
+        nullable=False,
+        index=True,
     )
     # status values: draft -> scheduled -> sending -> completed -> cancelled
     # Also: paused, failed
@@ -51,13 +56,16 @@ class EmailCampaign(BaseModel, SoftDeleteMixin):
     # provider values: smtp, ses
 
     scheduled_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
     started_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
     completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     # Aggregate delivery stats
@@ -71,11 +79,15 @@ class EmailCampaign(BaseModel, SoftDeleteMixin):
     failed_count: Mapped[int] = mapped_column(Integer, default=0)
 
     max_emails_per_minute: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
+        Integer,
+        nullable=True,
     )
     tracking_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     meta_data: Mapped[dict[str, Any] | None] = mapped_column(
-        "metadata", JSONB, nullable=True, default=dict
+        "metadata",
+        JSONB,
+        nullable=True,
+        default=dict,
     )
 
     def __repr__(self) -> str:
@@ -119,7 +131,10 @@ class EmailMessage(BaseModel):
 
     # Delivery status
     status: Mapped[str] = mapped_column(
-        String(30), default="queued", nullable=False, index=True
+        String(30),
+        default="queued",
+        nullable=False,
+        index=True,
     )
     # status values: queued -> sending -> sent -> delivered
     #                            -> bounced -> complained -> failed
@@ -127,61 +142,76 @@ class EmailMessage(BaseModel):
 
     provider: Mapped[str] = mapped_column(String(20), default="smtp")
     provider_message_id: Mapped[str | None] = mapped_column(
-        String(255), nullable=True
+        String(255),
+        nullable=True,
     )
 
     # Tracking
     tracking_id: Mapped[str | None] = mapped_column(
-        String(64), unique=True, nullable=True, index=True
+        String(64),
+        unique=True,
+        nullable=True,
+        index=True,
     )
     tracking_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
     opened_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
     open_count: Mapped[int] = mapped_column(Integer, default=0)
 
     clicked_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
     click_count: Mapped[int] = mapped_column(Integer, default=0)
 
     bounced_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
     bounce_type: Mapped[str | None] = mapped_column(
-        String(30), nullable=True
+        String(30),
+        nullable=True,
     )  # permanent, transient, undetermined
     bounce_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     complained_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
     complaint_feedback_type: Mapped[str | None] = mapped_column(
-        String(50), nullable=True
+        String(50),
+        nullable=True,
     )
 
     # Timing
     queued_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
     sent_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
     delivered_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
     failed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Custom metadata
     meta_data: Mapped[dict[str, Any] | None] = mapped_column(
-        "metadata", JSONB, nullable=True, default=dict
+        "metadata",
+        JSONB,
+        nullable=True,
+        default=dict,
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<EmailMessage {self.recipient_email} ({self.status})>"
-        )
+        return f"<EmailMessage {self.recipient_email} ({self.status})>"

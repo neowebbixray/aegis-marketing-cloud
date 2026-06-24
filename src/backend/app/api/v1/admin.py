@@ -1,5 +1,4 @@
-"""
-Admin router: feature flags, system management, and tenant overrides.
+"""Admin router: feature flags, system management, and tenant overrides.
 
 Requires superadmin privileges for most endpoints.
 """
@@ -10,16 +9,13 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_current_active_user
 from app.core.feature_flags import (
-    FEATURE_FLAG_DEFINITIONS,
     FeatureFlag,
     feature_flag_service,
 )
 from app.models.auth import User
-from app.schemas.base import build_single_response
 from app.schemas.feature_flags import (
     FeatureFlagDefinitionResponse,
     FeatureFlagOverrideResponse,
-    FeatureFlagToggleRequest,
     FeatureFlagsListResponse,
     SetFeatureFlagOverrideRequest,
 )
@@ -61,7 +57,7 @@ async def list_feature_flags(
                 default_enabled_tiers=sorted(definition.default_enabled_tiers),
                 beta=definition.beta,
                 internal=definition.internal,
-            )
+            ),
         )
 
     override_list = []
@@ -72,7 +68,7 @@ async def list_feature_flags(
                     tenant_id=tenant_id,
                     feature=flag_val.value if hasattr(flag_val, "value") else str(flag_val),
                     enabled=enabled,
-                )
+                ),
             )
 
     return FeatureFlagsListResponse(
@@ -103,7 +99,7 @@ async def set_feature_flag_override(
     except ValueError:
         from app.core.exceptions import NotFoundException
 
-        raise NotFoundException(detail=f"Unknown feature flag: {body.feature}")
+        raise NotFoundException(detail=f"Unknown feature flag: {body.feature}") from None
 
     if body.enabled is True:
         feature_flag_service.set_override(tenant_id, flag, True)
@@ -114,7 +110,8 @@ async def set_feature_flag_override(
         feature_flag_service.clear_override(tenant_id, flag)
 
     current_enabled = feature_flag_service.is_enabled(
-        flag, tenant_id=tenant_id
+        flag,
+        tenant_id=tenant_id,
     )
 
     return FeatureFlagOverrideResponse(

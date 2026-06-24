@@ -1,6 +1,4 @@
-"""
-Tests for the webhook endpoints: CRUD, deliveries, test, secret rotation.
-"""
+"""Tests for the webhook endpoints: CRUD, deliveries, test, secret rotation."""
 
 from __future__ import annotations
 
@@ -10,7 +8,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories.webhooks import WebhookDeliveryFactory, WebhookFactory
+from tests.factories.webhooks import WebhookFactory
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,5 @@
 """Report generation tasks — generate and deliver scheduled reports."""
+
 from app.tasks import celery_app
 
 

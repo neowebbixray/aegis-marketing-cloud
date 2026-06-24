@@ -107,8 +107,8 @@ export default function CustomFieldsPage() {
   const [isActiveFilter, setIsActiveFilter] = useState<boolean | undefined>(undefined);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  [form, setForm] = useState<CustomFieldFormState>(emptyForm);
-  [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState<CustomFieldFormState>(emptyForm);
+  const [editId, setEditId] = useState<string | null>(null);
 
   const { data, isLoading, error } = useCustomFields({
     page,
@@ -358,7 +358,7 @@ export default function CustomFieldsPage() {
             }}
           />
         </div>
-        <Select value={isActiveFilter ?? ''} onValueChange={(v) => { setIsActiveFilter(v === '' ? undefined : v === 'true'); setPage(1); }}>
+        <Select value={isActiveFilter === undefined ? '' : String(isActiveFilter)} onValueChange={(v) => { setIsActiveFilter(v === '' ? undefined : v === 'true'); setPage(1); }}>
           <SelectTrigger className="w-[120px]">
             <SelectValue placeholder="Active Status" />
           </SelectTrigger>

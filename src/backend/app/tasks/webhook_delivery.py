@@ -1,5 +1,4 @@
-"""
-Celery task for async webhook delivery with exponential backoff retry.
+"""Celery task for async webhook delivery with exponential backoff retry.
 
 Requires Celery to be installed and configured (``pip install celery[redis]``).
 
@@ -74,15 +73,14 @@ def _calculate_retry_delay(attempt: int) -> int:
     """Calculate exponential backoff delay (seconds) for Celery retry."""
     base = 60  # 1 minute
     delay = base * (2 ** (attempt - 1))
-    jitter = random.randint(0, min(delay // 2, 300))  # up to 50% jitter, max 5 min
+    jitter = random.randint(0, min(delay // 2, 300))  # nosec B311 — non-security jitter for retry backoff
     return min(delay + jitter, 3600)  # cap at 1 hour
 
 
 # ── Celery task (optional dependency) ─────────────────────────────────────────
 
 try:
-    from celery import Celery  # noqa: F811
-    from celery.exceptions import MaxRetriesExceededError  # noqa: F811
+    from celery import Celery
 
     celery_app = Celery(
         "webhook_delivery",
@@ -129,6 +127,7 @@ try:
 
         Raises:
             MaxRetriesExceededError: If all retry attempts are exhausted.
+
         """
         attempt = self.request.retries + 1
         payload_str = json.dumps(payload, default=str)
@@ -173,19 +172,18 @@ try:
                     "duration_ms": duration_ms,
                     "attempt": attempt,
                 }
-            else:
-                logger.warning(
-                    "Webhook delivery %s returned %d (attempt %d)",
-                    delivery_id,
-                    response.status_code,
-                    attempt,
-                )
-                # Retry for non-2xx responses
-                raise httpx.HTTPStatusError(
-                    f"HTTP {response.status_code}",
-                    request=response.request,
-                    response=response,
-                )
+            logger.warning(
+                "Webhook delivery %s returned %d (attempt %d)",
+                delivery_id,
+                response.status_code,
+                attempt,
+            )
+            # Retry for non-2xx responses
+            raise httpx.HTTPStatusError(
+                f"HTTP {response.status_code}",
+                request=response.request,
+                response=response,
+            )
 
         except (httpx.RequestError, httpx.TimeoutException, httpx.HTTPStatusError) as exc:
             duration_ms = int((time.monotonic() - start) * 1000)
@@ -207,11 +205,13 @@ try:
             )
 
             # Re-raise to trigger Celery auto-retry
-            raise self.retry(exc=exc, countdown=retry_delay)
+            raise self.retry(exc=exc, countdown=retry_delay) from exc
 
         except Exception as exc:
             logger.exception(
-                "Unexpected error delivering webhook %s: %s", delivery_id, exc
+                "Unexpected error delivering webhook %s: %s",
+                delivery_id,
+                exc,
             )
             raise
 
@@ -221,7 +221,7 @@ except ImportError:
         """Fallback when Celery is not installed."""
         logger.warning(
             "Celery is not installed. Cannot deliver webhook asynchronously. "
-            "Install it with: pip install celery[redis]"
+            "Install it with: pip install celery[redis]",
         )
         return {
             "status": "error",

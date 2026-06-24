@@ -1,5 +1,4 @@
-"""
-Knowledge Base service: Qdrant vector store management, document indexing,
+"""Knowledge Base service: Qdrant vector store management, document indexing,
 semantic search, and embedding generation.
 
 Uses a ``QdrantManager`` singleton for client lifecycle and a ``KnowledgeService``
@@ -13,11 +12,11 @@ import uuid
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, func, update as sa_update
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core.exceptions import NotFoundException, ValidationException
+from app.core.exceptions import ValidationException
 from app.models.ai import KnowledgeDocument
 from app.services.base import BaseService
 
@@ -37,17 +36,29 @@ class QdrantManager:
 
     _instance: QdrantManager | None = None
     _client: Any = None  # qdrant_client.QdrantClient
+    _available: bool | None = None
 
     def __new__(cls) -> QdrantManager:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
+    # ── Availability ──────────────────────────────────────────────────────
+
+    @property
+    def available(self) -> bool:
+        """Whether Qdrant is configured and reachable (lazy)."""
+        if self._available is None:
+            self._available = bool(settings.qdrant_host)
+        return self._available
+
     # ── Client ────────────────────────────────────────────────────────────
 
     @property
-    def client(self) -> Any:
-        """Lazy-initialised Qdrant client."""
+    def client(self) -> Any | None:
+        """Lazy-initialised Qdrant client, or ``None`` if not available."""
+        if not self.available:
+            return None
         if self._client is None:
             from qdrant_client import QdrantClient as _QdrantClient
 
@@ -68,6 +79,16 @@ class QdrantManager:
     def _collection_name(self, tenant_id: UUID) -> str:
         return f"knowledge_{tenant_id}"
 
+    def _require_client(self) -> Any:
+        """Return the Qdrant client or raise ``ServiceUnavailable``."""
+        client = self.client
+        if client is None:
+            raise RuntimeError(
+                "Qdrant is not configured. Set QDRANT_HOST or keep "
+                "``settings.qdrant_host`` populated."
+            )
+        return client
+
     # ── Collection management ─────────────────────────────────────────────
 
     async def create_collection(
@@ -81,6 +102,7 @@ class QdrantManager:
         Returns ``True`` if the collection was created, ``False`` if it
         already existed.
         """
+        client = self._require_client()
         name = self._collection_name(tenant_id)
         exists = await self.collection_exists(tenant_id)
         if exists:
@@ -91,7 +113,7 @@ class QdrantManager:
         dim = vector_size or settings.embedding_dimension
         dist = Distance.COSINE if distance.upper() == "COSINE" else Distance.DOT
 
-        self.client.create_collection(
+        client.create_collection(
             collection_name=name,
             vectors_config=VectorParams(size=dim, distance=dist),
         )
@@ -100,8 +122,9 @@ class QdrantManager:
 
     async def collection_exists(self, tenant_id: UUID) -> bool:
         """Return ``True`` if a Qdrant collection exists for *tenant_id*."""
+        client = self._require_client()
         name = self._collection_name(tenant_id)
-        collections = self.client.get_collections()
+        collections = client.get_collections()
         return any(c.name == name for c in collections.collections)
 
     async def delete_collection(self, tenant_id: UUID) -> bool:
@@ -109,27 +132,30 @@ class QdrantManager:
 
         Returns ``True`` if deleted, ``False`` if it did not exist.
         """
+        client = self._require_client()
         name = self._collection_name(tenant_id)
-        if not await self.collection_exists(tenant_id):
+        exists = await self.collection_exists(tenant_id)
+        if not exists:
             return False
-        self.client.delete_collection(collection_name=name)
+
+        client.delete_collection(collection_name=name)
         logger.info("Deleted Qdrant collection '%s'", name)
         return True
 
-    async def get_collection_info(self, tenant_id: UUID) -> dict[str, Any]:
-        """Return collection info (points count, vector config, etc.)."""
+    async def collection_info(self, tenant_id: UUID) -> dict[str, Any]:
+        """Return info about the Qdrant collection for *tenant_id*."""
+        client = self._require_client()
         name = self._collection_name(tenant_id)
-        if not await self.collection_exists(tenant_id):
-            return {"exists": False}
-        info = self.client.get_collection(collection_name=name)
+        info = client.get_collection(collection_name=name)
         return {
-            "exists": True,
-            "points_count": info.points_count,
+            "status": info.status,
             "vectors_count": info.vectors_count,
-            "config": info.config.model_dump() if hasattr(info.config, "model_dump") else str(info.config),
+            "points_count": info.points_count,
+            "config": {
+                "vector_size": info.config.params.vectors.size,
+                "distance": info.config.params.vectors.distance,
+            },
         }
-
-    # ── Point operations ──────────────────────────────────────────────────
 
     async def upsert_points(
         self,
@@ -146,12 +172,13 @@ class QdrantManager:
         """
         from qdrant_client.http.models import PointStruct
 
+        client = self._require_client()
         name = self._collection_name(tenant_id)
         qdrant_points = [
             PointStruct(id=str(p["id"]), vector=p["vector"], payload=p.get("payload", {}))
             for p in points
         ]
-        self.client.upsert(collection_name=name, points=qdrant_points)
+        client.upsert(collection_name=name, points=qdrant_points)
         logger.debug("Upserted %d points into '%s'", len(points), name)
         return len(points)
 
@@ -166,13 +193,14 @@ class QdrantManager:
         """
         from qdrant_client.http.models import Filter, FilterSelector, HasIdCondition
 
+        client = self._require_client()
         name = self._collection_name(tenant_id)
-        self.client.delete(
+        client.delete(
             collection_name=name,
             points_selector=FilterSelector(
                 filter=Filter(
                     must=[HasIdCondition(has_id=point_ids)],
-                )
+                ),
             ),
         )
         logger.debug("Deleted %d points from '%s'", len(point_ids), name)
@@ -190,6 +218,7 @@ class QdrantManager:
         """
         from qdrant_client.http.models import FieldCondition, Filter, MatchValue
 
+        client = self._require_client()
         name = self._collection_name(tenant_id)
         conditions = []
         if must_filters:
@@ -198,9 +227,9 @@ class QdrantManager:
                     FieldCondition(
                         key=f["key"],
                         match=MatchValue(value=f["value"]),
-                    )
+                    ),
                 )
-        self.client.delete(
+        client.delete(
             collection_name=name,
             points_selector=Filter(
                 must=conditions,
@@ -222,8 +251,8 @@ class QdrantManager:
             ``title``, ``doc_type``, ``source``, ``category``,
             ``tags``, ``metadata``.
         """
-        from qdrant_client.http.models import Filter as QdrantFilter
         from qdrant_client.http.models import FieldCondition, MatchValue
+        from qdrant_client.http.models import Filter as QdrantFilter
 
         name = self._collection_name(tenant_id)
 
@@ -234,12 +263,13 @@ class QdrantManager:
             for key, value in filters.items():
                 if value is not None:
                     conditions.append(
-                        FieldCondition(key=key, match=MatchValue(value=value))
+                        FieldCondition(key=key, match=MatchValue(value=value)),
                     )
             if conditions:
                 qdrant_filter = QdrantFilter(must=conditions)
 
-        hits = self.client.search(
+        client = self._require_client()
+        hits = client.search(
             collection_name=name,
             query_vector=query_vector,
             limit=top_k,
@@ -262,16 +292,17 @@ class QdrantManager:
                     "category": payload.get("category"),
                     "tags": payload.get("tags"),
                     "metadata": payload.get("metadata"),
-                }
+                },
             )
         return results
 
     async def count_points(self, tenant_id: UUID) -> int:
         """Return the total number of points in the collection."""
+        client = self._require_client()
         name = self._collection_name(tenant_id)
         if not await self.collection_exists(tenant_id):
             return 0
-        info = self.client.get_collection(collection_name=name)
+        info = client.get_collection(collection_name=name)
         return info.points_count or 0
 
     async def scroll_points(
@@ -281,16 +312,18 @@ class QdrantManager:
         filter_value: Any = None,
     ) -> list[dict[str, Any]]:
         """Scroll / fetch all points matching an optional filter."""
-        from qdrant_client.http.models import FieldCondition, Filter as QdrantFilter, MatchValue
+        from qdrant_client.http.models import FieldCondition, MatchValue
+        from qdrant_client.http.models import Filter as QdrantFilter
 
         name = self._collection_name(tenant_id)
         qdrant_filter = None
         if filter_key is not None and filter_value is not None:
             qdrant_filter = QdrantFilter(
-                must=[FieldCondition(key=filter_key, match=MatchValue(value=filter_value))]
+                must=[FieldCondition(key=filter_key, match=MatchValue(value=filter_value))],
             )
 
-        points = self.client.scroll(
+        client = self._require_client()
+        points = client.scroll(
             collection_name=name,
             limit=10000,
             with_payload=True,
@@ -353,7 +386,7 @@ async def generate_embedding(text: str) -> list[float]:
     except ImportError:
         logger.warning(
             "sentence-transformers not available — using fallback mock embedding. "
-            "Install with: pip install aegis-marketing-cloud[embeddings]"
+            "Install with: pip install aegis-marketing-cloud[embeddings]",
         )
         return _mock_embedding(text)
 
@@ -495,7 +528,7 @@ class KnowledgeService(BaseService):
                         "tags": doc.tags or [],
                         "metadata": doc.metadata or {},
                     },
-                }
+                },
             )
 
         # Upsert to Qdrant
@@ -542,7 +575,7 @@ class KnowledgeService(BaseService):
                         "chunks_indexed": 0,
                         "is_indexed": False,
                         "error": str(exc),
-                    }
+                    },
                 )
         return results
 
@@ -608,8 +641,6 @@ class KnowledgeService(BaseService):
         and merges results.  Use with extreme care in a multi-tenant
         environment.
         """
-        from qdrant_client.http.models import Filter as QdrantFilter
-
         query_vector = await generate_embedding(query)
         all_collections = self.qdrant.client.get_collections()
 
@@ -633,7 +664,7 @@ class KnowledgeService(BaseService):
                         "title": payload.get("title", ""),
                         "content": payload.get("chunk_text", ""),
                         "score": hit.score,
-                    }
+                    },
                 )
 
         # Sort by score descending and trim
@@ -724,9 +755,13 @@ class KnowledgeService(BaseService):
         exists = await self.qdrant.collection_exists(tenant_id)
 
         # Count indexed documents from DB
-        count_stmt = select(func.count()).select_from(KnowledgeDocument).where(
-            KnowledgeDocument.tenant_id == tenant_id,
-            KnowledgeDocument.is_indexed.is_(True),
+        count_stmt = (
+            select(func.count())
+            .select_from(KnowledgeDocument)
+            .where(
+                KnowledgeDocument.tenant_id == tenant_id,
+                KnowledgeDocument.is_indexed.is_(True),
+            )
         )
         result = await self.db.execute(count_stmt)
         doc_count = result.scalar() or 0
@@ -741,9 +776,7 @@ class KnowledgeService(BaseService):
             all_points = await self.qdrant.scroll_points(tenant_id)
             if all_points:
                 total_len = sum(
-                    len(p["payload"].get("chunk_text", ""))
-                    for p in all_points
-                    if p.get("payload")
+                    len(p["payload"].get("chunk_text", "")) for p in all_points if p.get("payload")
                 )
                 avg_chunk_size = total_len // len(all_points) if all_points else 0
 
@@ -762,12 +795,9 @@ class KnowledgeService(BaseService):
 
         Returns a list of result dicts (one per document).
         """
-        stmt = (
-            select(KnowledgeDocument)
-            .where(
-                KnowledgeDocument.tenant_id == tenant_id,
-                KnowledgeDocument.is_indexed.is_(False),
-            )
+        stmt = select(KnowledgeDocument).where(
+            KnowledgeDocument.tenant_id == tenant_id,
+            KnowledgeDocument.is_indexed.is_(False),
         )
         result = await self.db.execute(stmt)
         docs = list(result.scalars().all())

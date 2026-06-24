@@ -1,10 +1,6 @@
-"""
-Pydantic schemas for feature flag management endpoints.
-"""
+"""Pydantic schemas for feature flag management endpoints."""
 
 from __future__ import annotations
-
-from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -15,7 +11,8 @@ class FeatureFlagDefinitionResponse(BaseModel):
     feature: str = Field(..., description="Feature flag identifier")
     description: str = Field(..., description="Human-readable description")
     default_enabled_tiers: list[str] = Field(
-        ..., description="Tiers where this flag is enabled by default"
+        ...,
+        description="Tiers where this flag is enabled by default",
     )
     beta: bool = False
     internal: bool = False

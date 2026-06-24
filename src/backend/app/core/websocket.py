@@ -1,5 +1,4 @@
-"""
-WebSocket connection manager with Redis pub/sub for cross-process broadcasting.
+"""WebSocket connection manager with Redis pub/sub for cross-process broadcasting.
 
 Provides per-workspace connection pools, JWT-based authentication via query
 parameters, heartbeat health checks, and Redis pub/sub so that notifications
@@ -9,11 +8,11 @@ sent from any worker process reach all connected clients across all workers.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
-from datetime import datetime, timezone
-from typing import Any, Callable
-from uuid import UUID
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import WebSocket, WebSocketException, status
 
@@ -88,10 +87,12 @@ class ConnectionManager:
         self._running = True
         await self._init_redis()
         self._redis_task = asyncio.create_task(
-            self._redis_listener(), name="ws-redis-listener"
+            self._redis_listener(),
+            name="ws-redis-listener",
         )
         self._heartbeat_task = asyncio.create_task(
-            self._heartbeat_loop(), name="ws-heartbeat"
+            self._heartbeat_loop(),
+            name="ws-heartbeat",
         )
         logger.info("WebSocket ConnectionManager initialized")
 
@@ -103,16 +104,12 @@ class ConnectionManager:
         self._running = False
         if self._redis_task:
             self._redis_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._redis_task
-            except asyncio.CancelledError:
-                pass
         if self._heartbeat_task:
             self._heartbeat_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._heartbeat_task
-            except asyncio.CancelledError:
-                pass
         if self._redis_pub:
             await self._redis_pub.close()
         if self._redis_sub:
@@ -145,6 +142,7 @@ class ConnectionManager:
 
         Raises:
             WebSocketException(401): If the token is missing or invalid.
+
         """
         token = websocket.query_params.get("token")
         if not token:
@@ -182,6 +180,7 @@ class ConnectionManager:
             websocket: The WebSocket connection instance.
             user_id: The authenticated user's UUID string.
             workspace_id: Optional workspace UUID string for scoped broadcasts.
+
         """
         await websocket.accept()
 
@@ -217,6 +216,7 @@ class ConnectionManager:
         Args:
             websocket: The WebSocket connection to remove.
             workspace_id: The workspace it was registered under.
+
         """
         async with self._lock:
             # Remove from user pool
@@ -242,7 +242,9 @@ class ConnectionManager:
     # ── Sending Messages ───────────────────────────────────────────────────────
 
     async def send_personal_message(
-        self, user_id: str, message: dict[str, Any]
+        self,
+        user_id: str,
+        message: dict[str, Any],
     ) -> int:
         """Send a JSON message to all connections for a specific user.
 
@@ -252,6 +254,7 @@ class ConnectionManager:
 
         Returns:
             The number of connections the message was sent to.
+
         """
         return await self._broadcast_to_set(
             self._user_connections.get(user_id, set()),
@@ -259,7 +262,9 @@ class ConnectionManager:
         )
 
     async def broadcast_to_workspace(
-        self, workspace_id: str, message: dict[str, Any]
+        self,
+        workspace_id: str,
+        message: dict[str, Any],
     ) -> int:
         """Send a JSON message to all connections in a workspace.
 
@@ -269,6 +274,7 @@ class ConnectionManager:
 
         Returns:
             The number of connections the message was sent to.
+
         """
         return await self._broadcast_to_set(
             self._workspace_connections.get(workspace_id, set()),
@@ -276,7 +282,9 @@ class ConnectionManager:
         )
 
     async def broadcast_to_user(
-        self, user_id: str, message: dict[str, Any]
+        self,
+        user_id: str,
+        message: dict[str, Any],
     ) -> int:
         """Alias for :meth:`send_personal_message`."""
         return await self.send_personal_message(user_id, message)
@@ -289,6 +297,7 @@ class ConnectionManager:
 
         Returns:
             The number of connections the message was sent to.
+
         """
         all_connections: set[WebSocket] = set()
         async with self._lock:
@@ -348,13 +357,14 @@ class ConnectionManager:
             user_id: Target user UUID string.
             message: The notification message dict to deliver.
             workspace_id: Optional workspace scope.
+
         """
         envelope = {
             "type": "notification",
             "user_id": user_id,
             "workspace_id": workspace_id,
             "payload": message,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         if self._redis_pub:
             await self._redis_pub.publish(
@@ -373,12 +383,13 @@ class ConnectionManager:
             message: The broadcast message dict.
             workspace_id: If set, only workers with connections in this
                           workspace will deliver the message.
+
         """
         envelope = {
             "type": "broadcast",
             "workspace_id": workspace_id,
             "payload": message,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         if self._redis_pub:
             await self._redis_pub.publish(
@@ -388,7 +399,8 @@ class ConnectionManager:
 
     async def _redis_listener(self) -> None:
         """Background task: listen on Redis pub/sub channels and dispatch
-        messages to locally-connected clients."""
+        messages to locally-connected clients.
+        """
         try:
             pubsub = self._redis_sub.pubsub()
             await pubsub.subscribe(
@@ -432,10 +444,8 @@ class ConnectionManager:
         except Exception:
             logger.exception("Redis pub/sub listener error")
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 await self._redis_sub.close()
-            except Exception:
-                pass
 
     # ── Heartbeat ──────────────────────────────────────────────────────────────
 
@@ -451,15 +461,11 @@ class ConnectionManager:
             ping = {
                 "type": "heartbeat",
                 "payload": {},
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
             # Shallow-copy the current connections under the lock
             async with self._lock:
-                all_conns = {
-                    ws
-                    for conns in self._user_connections.values()
-                    for ws in conns
-                }
+                all_conns = {ws for conns in self._user_connections.values() for ws in conns}
 
             stale: list[WebSocket] = []
             for ws in all_conns:
@@ -470,7 +476,8 @@ class ConnectionManager:
 
             if stale:
                 logger.warning(
-                    "Heartbeat: removing %d stale connection(s)", len(stale)
+                    "Heartbeat: removing %d stale connection(s)",
+                    len(stale),
                 )
                 async with self._lock:
                     for ws in stale:

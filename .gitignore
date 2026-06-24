@@ -1,33 +1,108 @@
+# ─── Python ────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyc
-.env
-.venv/
-venv/
-node_modules/
-.next/
+*.pyo
+*$py.class
+*.so
+*.egg-info/
+*.egg
 dist/
 build/
+.eggs/
+wheels/
+*.whl
+
+# ─── Virtual Environments ──────────────────────────────────
+.venv/
+venv/
+.env/
+env/
+
+# ─── Environment & Secrets ─────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*.pub.pem
+*.key
+*.cert
+secrets/
+
+# ─── Testing ───────────────────────────────────────────────
+.pytest_cache/
+.coverage
+coverage/
+coverage.xml
+htmlcov/
+.coverage.*
+*.coverage
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.tox/
+
+# ─── Node.js / Frontend ────────────────────────────────────
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─── Docker ────────────────────────────────────────────────
+docker-data/
+.docker/
+
+# ─── Terraform / IaC ───────────────────────────────────────
 .terraform/
 *.tfstate*
 *.tfstate.backup
-*.db
-*.sqlite3
-coverage/
-.coverage
-coverage.xml
-htmlcov/
-.pytest_cache/
-site/
-.mypy_cache/
-.ruff_cache/
-.history/
-*.log
-*.egg-info/
-docker-data/
-*.pem
-*.pub.pem
+*.tfvars
+!example.tfvars
+crash.log
+
+# ─── IDEs & Editors ────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
 .DS_Store
 Thumbs.db
+*.sublime-*
+
+# ─── Logs & Reports ────────────────────────────────────────
+*.log
+reports/
+
+# ─── Database ──────────────────────────────────────────────
+*.db
+*.sqlite3
+*.sqlite
+data/
+
+# ─── Documentation Builds ──────────────────────────────────
+site/
+_build/
+api-docs/
+
+# ─── Temp & Generated ──────────────────────────────────────
+tmp/
+temp/
+*.bak
+*.tmp
 fix_*.py
 check_*.py
+strip_*.py
+
+# ─── Build Artifacts ───────────────────────────────────────
+*.tsbuildinfo
+next-env.d.ts
+bandit-report.xml
+uv.lock
+
+# ─── OS ────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini

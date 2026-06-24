@@ -1,12 +1,11 @@
-"""
-Pydantic schemas for the Knowledge Base module: article management, categories,
+"""Pydantic schemas for the Knowledge Base module: article management, categories,
 search indexing, versioning.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -17,20 +16,20 @@ class CategoryCreate(BaseModel):
     """Payload for POST /knowledge-base/categories."""
 
     name: str = Field(..., min_length=1, max_length=256)
-    description: Optional[str] = None
-    parent_id: Optional[UUID] = None
-    icon: Optional[str] = Field(None, max_length=64)
+    description: str | None = None
+    parent_id: UUID | None = None
+    icon: str | None = Field(None, max_length=64)
     sort_order: int = 0
 
 
 class CategoryUpdate(BaseModel):
     """Payload for PATCH /knowledge-base/categories/{id}."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=256)
-    description: Optional[str] = None
-    parent_id: Optional[UUID] = None
-    icon: Optional[str] = Field(None, max_length=64)
-    sort_order: Optional[int] = None
+    name: str | None = Field(None, min_length=1, max_length=256)
+    description: str | None = None
+    parent_id: UUID | None = None
+    icon: str | None = Field(None, max_length=64)
+    sort_order: int | None = None
 
 
 class CategoryResponse(BaseModel):
@@ -40,9 +39,9 @@ class CategoryResponse(BaseModel):
     tenant_id: UUID
     workspace_id: UUID
     name: str
-    description: Optional[str] = None
-    parent_id: Optional[UUID] = None
-    icon: Optional[str] = None
+    description: str | None = None
+    parent_id: UUID | None = None
+    icon: str | None = None
     sort_order: int
     article_count: int = 0
     created_at: datetime
@@ -57,26 +56,26 @@ class ArticleCreate(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=512)
     content: str = Field(..., min_length=1)
-    category_id: Optional[UUID] = None
-    tags: Optional[list[str]] = None
+    category_id: UUID | None = None
+    tags: list[str] | None = None
     status: str = Field(default="draft", max_length=32)  # draft, published, archived
     is_internal: bool = False
-    author_id: Optional[UUID] = None
-    seo_meta: Optional[dict[str, Any]] = None
-    metadata: Optional[dict[str, Any]] = None
+    author_id: UUID | None = None
+    seo_meta: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class ArticleUpdate(BaseModel):
     """Payload for PATCH /knowledge-base/articles/{id}."""
 
-    title: Optional[str] = Field(None, min_length=1, max_length=512)
-    content: Optional[str] = None
-    category_id: Optional[UUID] = None
-    tags: Optional[list[str]] = None
-    status: Optional[str] = Field(None, max_length=32)
-    is_internal: Optional[bool] = None
-    seo_meta: Optional[dict[str, Any]] = None
-    metadata: Optional[dict[str, Any]] = None
+    title: str | None = Field(None, min_length=1, max_length=512)
+    content: str | None = None
+    category_id: UUID | None = None
+    tags: list[str] | None = None
+    status: str | None = Field(None, max_length=32)
+    is_internal: bool | None = None
+    seo_meta: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class ArticleResponse(BaseModel):
@@ -88,19 +87,19 @@ class ArticleResponse(BaseModel):
     title: str
     slug: str
     content: str
-    category_id: Optional[UUID] = None
-    category_name: Optional[str] = None
-    tags: Optional[list[str]] = None
+    category_id: UUID | None = None
+    category_name: str | None = None
+    tags: list[str] | None = None
     status: str
     is_internal: bool
     version: int
-    author_id: Optional[UUID] = None
+    author_id: UUID | None = None
     view_count: int = 0
     helpful_count: int = 0
     not_helpful_count: int = 0
-    seo_meta: Optional[dict[str, Any]] = None
-    metadata: Optional[dict[str, Any]] = None
-    published_at: Optional[datetime] = None
+    seo_meta: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
+    published_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -116,7 +115,7 @@ class ArticleVersionResponse(BaseModel):
     title: str
     content: str
     author_id: UUID
-    change_summary: Optional[str] = None
+    change_summary: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -130,8 +129,8 @@ class SearchResultResponse(BaseModel):
     title: str
     slug: str
     excerpt: str
-    category_name: Optional[str] = None
-    tags: Optional[list[str]] = None
+    category_name: str | None = None
+    tags: list[str] | None = None
     relevance_score: float = 0.0
     updated_at: datetime
 
@@ -144,4 +143,4 @@ class SearchResponse(BaseModel):
     results: list[SearchResultResponse]
     total: int
     query: str
-    suggestion: Optional[str] = None
+    suggestion: str | None = None

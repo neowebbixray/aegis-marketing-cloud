@@ -1,5 +1,4 @@
-"""
-Pydantic schemas for the Knowledge Base module: document management, Qdrant
+"""Pydantic schemas for the Knowledge Base module: document management, Qdrant
 vector search, and indexing.
 """
 

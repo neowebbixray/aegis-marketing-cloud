@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -13,17 +13,19 @@ class SearchResultItem(BaseModel):
     """A single search result from any entity type."""
 
     entity_type: str = Field(
-        ..., description="Type of entity: contact, deal, campaign"
+        ...,
+        description="Type of entity: contact, deal, campaign",
     )
     entity_id: UUID = Field(..., description="UUID of the matched entity")
     title: str = Field(..., description="Display title for the result")
-    snippet: Optional[str] = Field(
-        None, description="Relevant text snippet from the matched fields"
+    snippet: str | None = Field(
+        None,
+        description="Relevant text snippet from the matched fields",
     )
     rank: float = Field(..., ge=0.0, le=1.0, description="ts_rank relevance score")
     workspace_id: UUID = Field(..., description="Workspace the entity belongs to")
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
     extra: dict[str, Any] = Field(
         default_factory=dict,
         description="Entity-specific additional fields",

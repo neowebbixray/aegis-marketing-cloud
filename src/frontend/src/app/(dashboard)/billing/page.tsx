@@ -129,8 +129,8 @@ export default function BillingPage() {
         setLoading((prev) => ({ ...prev, invoices: true }));
         const res = await billingApi.listInvoices({ page: invoicePage, limit: 10 });
         setInvoices(res.data);
-        setInvoiceTotal(res.meta.total);
-        setInvoiceHasMore(res.meta.has_more);
+        setInvoiceTotal(res.meta?.total ?? 0);
+        setInvoiceHasMore(res.meta?.has_more ?? false);
       } catch (err) {
         console.error('Failed to load invoices:', err);
       } finally {

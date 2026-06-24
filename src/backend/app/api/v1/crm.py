@@ -1,12 +1,10 @@
-"""
-CRM router: contacts, deals, pipelines, activities, and custom field definitions.
-"""
+"""CRM router: contacts, deals, pipelines, activities, and custom field definitions."""
 
 from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_user, get_db, get_tenant_context
@@ -30,7 +28,13 @@ from app.schemas.crm import (
     PipelineCreate,
     PipelineResponse,
 )
-from app.services.crm import ActivityService, ContactService, CustomFieldDefinitionService, DealService, PipelineService
+from app.services.crm import (
+    ActivityService,
+    ContactService,
+    CustomFieldDefinitionService,
+    DealService,
+    PipelineService,
+)
 
 router = APIRouter(prefix="/crm", tags=["crm"])
 
@@ -199,12 +203,13 @@ async def get_contact_lead_score_history(
     Returns the docs-mandated ``{data, meta, links}`` envelope.
     """
     tenant_id = await get_tenant_context(request, current_user=current_user)
-    service = ContactService(db)
-    
+    ContactService(db)
+
     # Get lead score history records
-    from sqlalchemy import select, desc
+    from sqlalchemy import desc, select
+
     from app.models.crm import LeadScoreHistory
-    
+
     skip = (page - 1) * limit
     query = (
         select(LeadScoreHistory)
@@ -216,10 +221,10 @@ async def get_contact_lead_score_history(
         .offset(skip)
         .limit(limit)
     )
-    
+
     result = await db.execute(query)
     items = result.scalars().all()
-    
+
     # Get total count
     count_query = select(LeadScoreHistory).where(
         LeadScoreHistory.contact_id == contact_id,
@@ -227,7 +232,7 @@ async def get_contact_lead_score_history(
     )
     count_result = await db.execute(count_query)
     total = len(count_result.scalars().all())
-    
+
     return build_list_response(
         data=[LeadScoreHistoryResponse.model_validate(item) for item in items],
         total=total,
@@ -248,7 +253,6 @@ async def delete_contact(
     tenant_id = await get_tenant_context(request, current_user=current_user)
     service = ContactService(db)
     await service.soft_delete(contact_id, tenant_id=tenant_id)
-    return None
 
 
 # ── Deals ────────────────────────────────────────────────────────────────────
@@ -372,7 +376,6 @@ async def delete_deal(
     tenant_id = await get_tenant_context(request, current_user=current_user)
     service = DealService(db)
     await service.soft_delete(deal_id, tenant_id=tenant_id)
-    return None
 
 
 # ── Pipelines ────────────────────────────────────────────────────────────────
@@ -613,4 +616,3 @@ async def delete_custom_field_definition(
     tenant_id = await get_tenant_context(request, current_user=current_user)
     service = CustomFieldDefinitionService(db)
     await service.soft_delete(field_id, tenant_id=tenant_id)
-    return None

@@ -139,8 +139,8 @@ export default function MediaPage() {
       // Note: category is handled via tags/search on backend
       const res = await mediaApi.list(params);
       setAssets(res.data);
-      setTotal(res.meta.total);
-      setHasMore(res.meta.has_more);
+      setTotal(res.meta?.total ?? 0);
+      setHasMore(res.meta?.has_more ?? false);
     } catch (err) {
       console.error('Failed to load media:', err);
       toast.error('Failed to load media assets');
@@ -333,7 +333,11 @@ export default function MediaPage() {
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-16">
                 <div className="rounded-full bg-muted p-4 mb-4">
-                  <Image className="h-10 w-10 text-muted-foreground" />
+                  <img
+                  src="/placeholder-media.svg"
+                  alt="No media assets"
+                  className="h-10 w-10 text-muted-foreground"
+                />
                 </div>
                 <p className="text-lg font-medium mb-1">No media assets</p>
                 <p className="text-sm text-muted-foreground mb-4">
@@ -372,12 +376,13 @@ export default function MediaPage() {
                         onChange={() => toggleSelect(asset.id)}
                       />
                       {previewUrl ? (
-                        <img
-                          src={previewUrl}
-                          alt={asset.alt_text || asset.filename}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
+                                              // eslint-disable-next-line @next/next/no-img-element
+                                              <img
+                                                src={previewUrl}
+                                                alt={asset.alt_text || asset.filename}
+                                                className="h-full w-full object-cover"
+                                              />
+                                            ) : (
                         <div
                           className={`rounded-lg p-4 ${
                             mediaTypeColors[asset.media_type] || 'bg-muted'

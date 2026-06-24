@@ -1,5 +1,4 @@
-"""
-Health check endpoints for Aegis Marketing Cloud.
+"""Health check endpoints for Aegis Marketing Cloud.
 
 Provides three tiers of health checking:
 - ``/api/v1/health/live`` — Liveness probe (is the app running?)
@@ -86,7 +85,7 @@ async def _check_minio() -> dict[str, Any]:
         "latency_ms": None,
         "error": None,
     }
-    if not settings.minio_endpoint:
+    if not settings.minio_endpoint or settings.minio_endpoint == "localhost:9000":
         result["status"] = "not_configured"
         return result
 
@@ -119,6 +118,9 @@ async def _check_qdrant() -> dict[str, Any]:
         "error": None,
         "version": None,
     }
+    if not settings.qdrant_host or settings.qdrant_host == "localhost":
+        result["status"] = "not_configured"
+        return result
     start = time.monotonic()
     try:
         from qdrant_client import QdrantClient
@@ -158,7 +160,8 @@ async def _check_rabbitmq() -> dict[str, Any]:
         import aio_pika
 
         connection = await asyncio.wait_for(
-            aio_pika.connect_robust(settings.rabbitmq_url), timeout=5
+            aio_pika.connect_robust(settings.rabbitmq_url),
+            timeout=5,
         )
         await connection.close()
         result["status"] = "connected"
@@ -228,11 +231,13 @@ async def full_health() -> dict[str, Any]:
     services: list[dict[str, Any]] = []
     for check in checks:
         if isinstance(check, Exception):
-            services.append({
-                "name": "unknown",
-                "status": "error",
-                "error": str(check),
-            })
+            services.append(
+                {
+                    "name": "unknown",
+                    "status": "error",
+                    "error": str(check),
+                }
+            )
         else:
             services.append(check)
 

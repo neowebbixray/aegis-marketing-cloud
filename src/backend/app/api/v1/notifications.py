@@ -1,5 +1,4 @@
-"""
-Notification REST endpoints — list, read, and manage in-app notifications.
+"""Notification REST endpoints — list, read, and manage in-app notifications.
 
 All endpoints (except ``unread_count``) require authentication and respect
 the tenant context via ``X-Tenant-ID`` header or the user's default tenant.

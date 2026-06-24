@@ -1,5 +1,4 @@
-"""
-Factory classes for email delivery models:
+"""Factory classes for email delivery models:
 EmailCampaign, EmailMessage.
 EmailTemplateFactory is already defined in tests/factories/marketing.py.
 """
@@ -7,12 +6,11 @@ EmailTemplateFactory is already defined in tests/factories/marketing.py.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import factory
-from factory.alchemy import SQLAlchemyModelFactory
-
 from app.models.email import EmailCampaign, EmailMessage
+from factory.alchemy import SQLAlchemyModelFactory
 
 
 class BaseFactory(SQLAlchemyModelFactory):
@@ -42,7 +40,7 @@ class EmailCampaignFactory(BaseFactory):
     status = factory.Iterator(["draft", "scheduled", "sending", "completed", "failed"])
     provider = factory.Iterator(["smtp", "ses"])
     scheduled_at = factory.LazyFunction(
-        lambda: datetime.now(timezone.utc) + timedelta(days=1)
+        lambda: datetime.now(UTC) + timedelta(days=1),
     )
     started_at = None
     completed_at = None
@@ -80,10 +78,10 @@ class EmailMessageFactory(BaseFactory):
     status = factory.Iterator(["queued", "sent", "delivered", "bounced", "failed"])
     provider = factory.Iterator(["smtp", "ses"])
     provider_message_id = factory.LazyFunction(
-        lambda: f"msg_{uuid.uuid4().hex}"
+        lambda: f"msg_{uuid.uuid4().hex}",
     )
     tracking_id = factory.LazyFunction(
-        lambda: uuid.uuid4().hex
+        lambda: uuid.uuid4().hex,
     )
     tracking_enabled = True
     opened_at = None
@@ -96,7 +94,7 @@ class EmailMessageFactory(BaseFactory):
     complained_at = None
     complaint_feedback_type = None
     queued_at = factory.LazyFunction(
-        lambda: datetime.now(timezone.utc) - timedelta(hours=1)
+        lambda: datetime.now(UTC) - timedelta(hours=1),
     )
     sent_at = None
     delivered_at = None

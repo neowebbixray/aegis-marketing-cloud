@@ -1,6 +1,4 @@
-"""
-Tests for the tenant and workspace endpoints.
-"""
+"""Tests for the tenant and workspace endpoints."""
 
 from __future__ import annotations
 
@@ -32,7 +30,9 @@ async def test_create_workspace(client: AsyncClient, auth_headers, sample_tenant
 
 
 @pytest.mark.asyncio
-async def test_list_workspaces(client: AsyncClient, auth_headers, sample_tenant, sample_workspace) -> None:
+async def test_list_workspaces(
+    client: AsyncClient, auth_headers, sample_tenant, sample_workspace
+) -> None:
     """A user can list workspaces in their tenant."""
     headers = auth_headers.copy()
     headers["X-Tenant-ID"] = str(sample_tenant.id)

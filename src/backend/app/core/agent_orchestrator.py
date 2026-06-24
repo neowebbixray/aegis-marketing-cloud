@@ -1,5 +1,4 @@
-"""
-Agent Orchestrator — built-in registry of 12 specialised AI agent roles,
+"""Agent Orchestrator — built-in registry of 12 specialised AI agent roles,
 execution engine, tool dispatcher, conversation runner, and execution history.
 
 This module provides the in-memory agent definitions and orchestration logic.
@@ -10,12 +9,11 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Any, Optional
-from uuid import UUID, uuid4
+from typing import Any
+from uuid import UUID
 
 import httpx
-from sqlalchemy import select, desc, func
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -37,7 +35,10 @@ TOOLS_CATALOG: dict[str, dict[str, Any]] = {
         "name": "crm_list_contacts",
         "category": "CRM",
         "description": "List CRM contacts with optional filters.",
-        "parameters": {"type": "object", "properties": {"limit": {"type": "integer"}, "offset": {"type": "integer"}}},
+        "parameters": {
+            "type": "object",
+            "properties": {"limit": {"type": "integer"}, "offset": {"type": "integer"}},
+        },
     },
     "crm_get_deal": {
         "name": "crm_get_deal",
@@ -49,7 +50,10 @@ TOOLS_CATALOG: dict[str, dict[str, Any]] = {
         "name": "marketing_list_campaigns",
         "category": "Marketing",
         "description": "List marketing campaigns for a tenant.",
-        "parameters": {"type": "object", "properties": {"tenant_id": {"type": "string"}, "status": {"type": "string"}}},
+        "parameters": {
+            "type": "object",
+            "properties": {"tenant_id": {"type": "string"}, "status": {"type": "string"}},
+        },
     },
     "marketing_get_campaign": {
         "name": "marketing_get_campaign",
@@ -61,7 +65,14 @@ TOOLS_CATALOG: dict[str, dict[str, Any]] = {
         "name": "content_generate",
         "category": "Content",
         "description": "Generate marketing copy for a given brief.",
-        "parameters": {"type": "object", "properties": {"brief": {"type": "string"}, "tone": {"type": "string"}, "length": {"type": "string"}}},
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "brief": {"type": "string"},
+                "tone": {"type": "string"},
+                "length": {"type": "string"},
+            },
+        },
     },
     "content_analyze": {
         "name": "content_analyze",
@@ -73,25 +84,45 @@ TOOLS_CATALOG: dict[str, dict[str, Any]] = {
         "name": "analytics_get_metrics",
         "category": "Analytics",
         "description": "Retrieve analytics metrics for a tenant.",
-        "parameters": {"type": "object", "properties": {"tenant_id": {"type": "string"}, "metric": {"type": "string"}, "period": {"type": "string"}}},
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "tenant_id": {"type": "string"},
+                "metric": {"type": "string"},
+                "period": {"type": "string"},
+            },
+        },
     },
     "analytics_get_report": {
         "name": "analytics_get_report",
         "category": "Analytics",
         "description": "Generate a structured analytics report.",
-        "parameters": {"type": "object", "properties": {"tenant_id": {"type": "string"}, "report_type": {"type": "string"}}},
+        "parameters": {
+            "type": "object",
+            "properties": {"tenant_id": {"type": "string"}, "report_type": {"type": "string"}},
+        },
     },
     "search_knowledge": {
         "name": "search_knowledge",
         "category": "Search",
         "description": "Search the knowledge base for relevant documents.",
-        "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "tenant_id": {"type": "string"}, "limit": {"type": "integer"}}},
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "tenant_id": {"type": "string"},
+                "limit": {"type": "integer"},
+            },
+        },
     },
     "social_get_insights": {
         "name": "social_get_insights",
         "category": "Social",
         "description": "Retrieve social media analytics/insights.",
-        "parameters": {"type": "object", "properties": {"platform": {"type": "string"}, "period": {"type": "string"}}},
+        "parameters": {
+            "type": "object",
+            "properties": {"platform": {"type": "string"}, "period": {"type": "string"}},
+        },
     },
     "email_get_templates": {
         "name": "email_get_templates",
@@ -103,13 +134,19 @@ TOOLS_CATALOG: dict[str, dict[str, Any]] = {
         "name": "email_generate_subject",
         "category": "Email",
         "description": "Generate email subject line variants.",
-        "parameters": {"type": "object", "properties": {"topic": {"type": "string"}, "tone": {"type": "string"}}},
+        "parameters": {
+            "type": "object",
+            "properties": {"topic": {"type": "string"}, "tone": {"type": "string"}},
+        },
     },
     "data_export": {
         "name": "data_export",
         "category": "Data",
         "description": "Export data in a requested format (CSV, JSON).",
-        "parameters": {"type": "object", "properties": {"entity": {"type": "string"}, "format": {"type": "string"}}},
+        "parameters": {
+            "type": "object",
+            "properties": {"entity": {"type": "string"}, "format": {"type": "string"}},
+        },
     },
     "web_fetch": {
         "name": "web_fetch",
@@ -165,7 +202,11 @@ AGENT_REGISTRY: dict[str, dict[str, Any]] = {
             "opportunities, and build comprehensive marketing plans. Your "
             "recommendations are data-informed, audience-centric, and ROI-focused."
         ),
-        "default_tools": ["analytics_get_metrics", "analytics_get_report", "marketing_list_campaigns"],
+        "default_tools": [
+            "analytics_get_metrics",
+            "analytics_get_report",
+            "marketing_list_campaigns",
+        ],
     },
     "analyst": {
         "type": "analyst",
@@ -222,8 +263,10 @@ AGENT_REGISTRY: dict[str, dict[str, Any]] = {
             "set KPIs, track performance, and pivot based on results."
         ),
         "default_tools": [
-            "marketing_list_campaigns", "marketing_get_campaign",
-            "analytics_get_metrics", "content_generate",
+            "marketing_list_campaigns",
+            "marketing_get_campaign",
+            "analytics_get_metrics",
+            "content_generate",
         ],
     },
     "data": {
@@ -280,6 +323,7 @@ SUPPORTED_PROVIDERS = {"opencode", "openai", "anthropic", "azure", "custom"}
 # Agent Orchestrator
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class AgentOrchestrator:
     """Orchestrates AI agent execution, tool dispatch, conversation management,
     and execution history retrieval.
@@ -304,12 +348,13 @@ class AgentOrchestrator:
 
         Raises:
             ValidationException: If the agent type is unknown.
+
         """
         agent = AGENT_REGISTRY.get(agent_type)
         if agent is None:
             raise ValidationException(
                 detail=f"Unknown agent type '{agent_type}'. "
-                       f"Available: {', '.join(sorted(AGENT_REGISTRY))}"
+                f"Available: {', '.join(sorted(AGENT_REGISTRY))}",
             )
         return agent
 
@@ -320,8 +365,8 @@ class AgentOrchestrator:
         agent_type: str,
         tenant_id: UUID,
         input_data: dict[str, Any],
-        conversation_id: Optional[UUID] = None,
-        user_id: Optional[UUID] = None,
+        conversation_id: UUID | None = None,
+        user_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Execute an AI agent with the given input.
 
@@ -380,9 +425,8 @@ class AgentOrchestrator:
         ai_agent.total_executions = (ai_agent.total_executions or 0) + 1
         if duration_ms and ai_agent.avg_response_time_ms:
             ai_agent.avg_response_time_ms = (
-                (ai_agent.avg_response_time_ms * (ai_agent.total_executions - 1) + duration_ms)
-                / ai_agent.total_executions
-            )
+                ai_agent.avg_response_time_ms * (ai_agent.total_executions - 1) + duration_ms
+            ) / ai_agent.total_executions
         elif duration_ms:
             ai_agent.avg_response_time_ms = float(duration_ms)
 
@@ -390,7 +434,9 @@ class AgentOrchestrator:
         if conversation_id and output_text:
             await self._append_to_conversation(
                 conversation_id=conversation_id,
-                user_content=str(input_data.get("prompt", input_data.get("message", str(input_data)))),
+                user_content=str(
+                    input_data.get("prompt", input_data.get("message", str(input_data)))
+                ),
                 assistant_content=output_text,
                 user_id=user_id,
                 tenant_id=tenant_id,
@@ -433,17 +479,17 @@ class AgentOrchestrator:
 
     async def create_conversation(
         self,
-        title: Optional[str],
+        title: str | None,
         user_id: UUID,
         tenant_id: UUID,
-        agent_type: Optional[str] = None,
+        agent_type: str | None = None,
     ) -> Conversation:
         """Create a new conversation thread.
 
         Optionally associate with an agent type by finding or creating the
         corresponding ``AIAgent`` record.
         """
-        agent_id: Optional[UUID] = None
+        agent_id: UUID | None = None
         if agent_type:
             agent_def = self.get_agent(agent_type)
             ai_agent = await self._resolve_agent_record(agent_def, tenant_id)
@@ -508,12 +554,9 @@ class AgentOrchestrator:
     async def get_conversation_history(
         self,
         conversation_id: UUID,
-    ) -> Optional[Conversation]:
+    ) -> Conversation | None:
         """Fetch a conversation with its messages eagerly loaded."""
-        stmt = (
-            select(Conversation)
-            .where(Conversation.id == conversation_id)
-        )
+        stmt = select(Conversation).where(Conversation.id == conversation_id)
         result = await self.db.execute(stmt)
         conv = result.scalars().first()
         if conv is None:
@@ -525,7 +568,7 @@ class AgentOrchestrator:
     async def list_conversations(
         self,
         tenant_id: UUID,
-        user_id: Optional[UUID] = None,
+        user_id: UUID | None = None,
         skip: int = 0,
         limit: int = 50,
     ) -> tuple[list[Conversation], int]:
@@ -534,9 +577,13 @@ class AgentOrchestrator:
             Conversation.tenant_id == tenant_id,
             Conversation.is_archived == False,  # noqa: E712
         )
-        count_stmt = select(func.count()).select_from(Conversation).where(
-            Conversation.tenant_id == tenant_id,
-            Conversation.is_archived == False,  # noqa: E712
+        count_stmt = (
+            select(func.count())
+            .select_from(Conversation)
+            .where(
+                Conversation.tenant_id == tenant_id,
+                Conversation.is_archived == False,  # noqa: E712
+            )
         )
 
         if user_id:
@@ -585,7 +632,9 @@ class AgentOrchestrator:
     # ── Internal Helpers ──────────────────────────────────────────────────────
 
     async def _resolve_agent_record(
-        self, agent_def: dict[str, Any], tenant_id: UUID
+        self,
+        agent_def: dict[str, Any],
+        tenant_id: UUID,
     ) -> AIAgent:
         """Find an existing AIAgent record for this tenant+type, or create one.
 
@@ -618,7 +667,7 @@ class AgentOrchestrator:
         self,
         agent_def: dict[str, Any],
         input_data: dict[str, Any],
-        conversation_id: Optional[UUID] = None,
+        conversation_id: UUID | None = None,
     ) -> list[dict[str, str]]:
         """Build the message list for the LLM call.
 
@@ -642,7 +691,7 @@ class AgentOrchestrator:
         The provider endpoint and model are read from ``settings``.
         Falls back to a local simulation when no provider is configured.
         """
-        provider = getattr(settings, "ai_provider", "").lower() or "opencode"
+        getattr(settings, "ai_provider", "").lower() or "opencode"
         model = getattr(settings, "ai_model", "big-pickle")
         api_key = getattr(settings, "ai_api_key", None)
         base_url = getattr(settings, "ai_base_url", None)
@@ -678,13 +727,14 @@ class AgentOrchestrator:
             return await self._simulate_llm_call(messages)
 
     async def _simulate_llm_call(
-        self, messages: list[dict[str, str]]
+        self,
+        messages: list[dict[str, str]],
     ) -> dict[str, Any]:
         """Simulate an LLM response when no provider is configured.
 
         Useful for development and testing.
         """
-        system_msg = next((m["content"] for m in messages if m["role"] == "system"), "")
+        next((m["content"] for m in messages if m["role"] == "system"), "")
         user_msg = next((m["content"] for m in messages if m["role"] == "user"), "")
 
         # Simple keyword-based response
@@ -703,7 +753,7 @@ class AgentOrchestrator:
         conversation_id: UUID,
         user_content: str,
         assistant_content: str,
-        user_id: Optional[UUID],
+        user_id: UUID | None,
         tenant_id: UUID,
     ) -> None:
         """Append user and assistant messages to an existing conversation."""

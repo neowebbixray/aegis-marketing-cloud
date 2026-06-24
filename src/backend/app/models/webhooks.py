@@ -1,5 +1,4 @@
-"""
-Webhook models — webhook registration and delivery tracking.
+"""Webhook models — webhook registration and delivery tracking.
 
 Tenant-scoped: each tenant manages its own webhook endpoints.
 """
@@ -23,7 +22,9 @@ class Webhook(BaseModel, SoftDeleteMixin):
     __tablename__ = "webhooks"
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     url: Mapped[str] = mapped_column(String(2048), nullable=False)
     secret_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -31,7 +32,9 @@ class Webhook(BaseModel, SoftDeleteMixin):
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
     api_version: Mapped[str] = mapped_column(String(10), default="v1", nullable=False)
     retry_config: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB, nullable=True, default=dict
+        JSONB,
+        nullable=True,
+        default=dict,
     )
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
@@ -45,12 +48,16 @@ class WebhookDelivery(BaseModel):
     __tablename__ = "webhook_deliveries"
 
     webhook_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("webhooks.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("webhooks.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
     request_headers: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB, nullable=True, default=dict
+        JSONB,
+        nullable=True,
+        default=dict,
     )
     request_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     response_status: Mapped[int | None] = mapped_column(nullable=True)
@@ -59,10 +66,12 @@ class WebhookDelivery(BaseModel):
     attempt: Mapped[int] = mapped_column(default=1, nullable=False)
     max_attempts: Mapped[int] = mapped_column(default=5, nullable=False)
     next_retry_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
     completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     def __repr__(self) -> str:

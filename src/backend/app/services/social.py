@@ -1,5 +1,4 @@
-"""
-Social service: post scheduling, platform publishing, engagement metrics,
+"""Social service: post scheduling, platform publishing, engagement metrics,
 social listening.
 """
 
@@ -8,10 +7,10 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, ClassVar
 from uuid import UUID
 
-from sqlalchemy import select, func, desc
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException, ValidationException
@@ -75,7 +74,7 @@ class SocialPostService(BaseService[SocialPost]):
 
     # ── Platform client registry ──────────────────────────────────────────
 
-    _platform_clients: dict[str, type[PlatformClient]] = {
+    _platform_clients: ClassVar[dict[str, type[PlatformClient]]] = {
         "twitter": SimulatedPlatformClient,
         "linkedin": SimulatedPlatformClient,
         "facebook": SimulatedPlatformClient,
@@ -94,7 +93,7 @@ class SocialPostService(BaseService[SocialPost]):
         if client_cls is None:
             raise ValidationException(
                 detail=f"Unsupported platform: {platform!r}. "
-                f"Supported: {list(self._platform_clients)}"
+                f"Supported: {list(self._platform_clients)}",
             )
         return client_cls()
 
@@ -267,11 +266,7 @@ class SocialPostService(BaseService[SocialPost]):
         if platform:
             filters.append(SocialPost.platform == platform)
 
-        stmt = (
-            select(SocialPost)
-            .where(*filters)
-            .order_by(SocialPost.scheduled_at.asc())
-        )
+        stmt = select(SocialPost).where(*filters).order_by(SocialPost.scheduled_at.asc())
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 

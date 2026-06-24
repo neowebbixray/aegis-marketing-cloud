@@ -1,12 +1,11 @@
-"""
-Pydantic schemas for the Marketplace module: plugin/extension listings,
+"""Pydantic schemas for the Marketplace module: plugin/extension listings,
 installation management, billing integration, review system.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -20,25 +19,25 @@ class ListingResponse(BaseModel):
     name: str
     slug: str
     short_description: str
-    description: Optional[str] = None
+    description: str | None = None
     category: str  # integration, plugin, template, theme, workflow
     publisher: str
-    publisher_website: Optional[str] = None
+    publisher_website: str | None = None
     version: str
-    icon_url: Optional[str] = None
-    screenshots: Optional[list[str]] = None
+    icon_url: str | None = None
+    screenshots: list[str] | None = None
     pricing_model: str  # free, one_time, subscription, usage_based
-    price: Optional[float] = None
+    price: float | None = None
     currency: str = "USD"
     is_verified: bool = False
     is_featured: bool = False
-    rating_avg: Optional[float] = Field(None, ge=0, le=5)
+    rating_avg: float | None = Field(None, ge=0, le=5)
     rating_count: int = 0
     total_installs: int = 0
-    documentation_url: Optional[str] = None
-    support_url: Optional[str] = None
-    permissions_required: Optional[list[str]] = None
-    metadata: Optional[dict[str, Any]] = None
+    documentation_url: str | None = None
+    support_url: str | None = None
+    permissions_required: list[str] | None = None
+    metadata: dict[str, Any] | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -49,10 +48,10 @@ class ListingDetailResponse(BaseModel):
     """Detailed marketplace listing with full description and reviews."""
 
     listing: ListingResponse
-    recent_reviews: Optional[list[dict[str, Any]]] = None
-    changelog: Optional[list[dict[str, Any]]] = None
-    compatible_versions: Optional[list[str]] = None
-    dependencies: Optional[list[str]] = None
+    recent_reviews: list[dict[str, Any]] | None = None
+    changelog: list[dict[str, Any]] | None = None
+    compatible_versions: list[str] | None = None
+    dependencies: list[str] | None = None
 
 
 # ── Installation ────────────────────────────────────────────────────────────
@@ -63,13 +62,13 @@ class InstallationResponse(BaseModel):
     tenant_id: UUID
     workspace_id: UUID
     listing_id: UUID
-    listing_name: Optional[str] = None
+    listing_name: str | None = None
     version_installed: str
     status: str  # installing, active, inactive, error, uninstalling
-    config: Optional[dict[str, Any]] = None
-    installed_by: Optional[UUID] = None
-    last_used_at: Optional[datetime] = None
-    error_message: Optional[str] = None
+    config: dict[str, Any] | None = None
+    installed_by: UUID | None = None
+    last_used_at: datetime | None = None
+    error_message: str | None = None
     installed_at: datetime
     updated_at: datetime
 
@@ -82,10 +81,10 @@ class ReviewCreate(BaseModel):
 
     listing_id: UUID
     rating: int = Field(..., ge=1, le=5)
-    title: Optional[str] = Field(None, max_length=256)
-    content: Optional[str] = Field(None, max_length=5000)
-    pros: Optional[list[str]] = None
-    cons: Optional[list[str]] = None
+    title: str | None = Field(None, max_length=256)
+    content: str | None = Field(None, max_length=5000)
+    pros: list[str] | None = None
+    cons: list[str] | None = None
 
 
 class ReviewResponse(BaseModel):
@@ -94,13 +93,13 @@ class ReviewResponse(BaseModel):
     id: UUID
     listing_id: UUID
     user_id: UUID
-    user_name: Optional[str] = None
-    user_avatar: Optional[str] = None
+    user_name: str | None = None
+    user_avatar: str | None = None
     rating: int
-    title: Optional[str] = None
-    content: Optional[str] = None
-    pros: Optional[list[str]] = None
-    cons: Optional[list[str]] = None
+    title: str | None = None
+    content: str | None = None
+    pros: list[str] | None = None
+    cons: list[str] | None = None
     is_verified_purchase: bool = False
     is_flagged: bool = False
     helpful_count: int = 0

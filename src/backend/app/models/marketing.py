@@ -2,6 +2,7 @@
 
 All models are multi-tenant (tenant_id + workspace_id).
 """
+
 from __future__ import annotations
 
 import uuid
@@ -9,8 +10,8 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Boolean, DateTime, Integer, Numeric, String, Text
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import BaseModel, SoftDeleteMixin
@@ -34,6 +35,12 @@ class Campaign(BaseModel, SoftDeleteMixin):
     schedule_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ai_optimized: Mapped[bool] = mapped_column(Boolean, default=False)
     metrics: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True, default=dict)
+    # Full-text search vector (added via 0004 migration)
+    search_vector: Mapped[str | None] = mapped_column(
+        TSVECTOR,
+        nullable=True,
+        comment="Full-text search vector",
+    )
 
     def __repr__(self) -> str:
         return f"<Campaign {self.name} ({self.status})>"

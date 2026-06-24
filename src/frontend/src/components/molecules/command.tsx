@@ -42,6 +42,7 @@ function Command({ className, ...props }: CommandProps) {
 interface CommandInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
   wrapperClassName?: string;
   onValueChange?: (value: string) => void;
+  onChange?: React.ChangeEventHandler<HTMLInputElement>;
 }
 
 const CommandInput = React.forwardRef<HTMLInputElement, CommandInputProps>(
@@ -112,18 +113,21 @@ function CommandGroup({ className, heading, children, ...props }: CommandGroupPr
 interface CommandItemProps extends React.HTMLAttributes<HTMLDivElement> {
   onSelect?: () => void;
   disabled?: boolean;
+  selected?: boolean;
 }
 
 function CommandItem({
   className,
   onSelect,
   disabled,
+  selected,
   children,
   ...props
 }: CommandItemProps) {
   return (
     <div
       role="option"
+      aria-selected={selected}
       aria-disabled={disabled}
       data-disabled={disabled}
       onClick={disabled ? undefined : onSelect}

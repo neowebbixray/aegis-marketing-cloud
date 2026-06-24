@@ -2,6 +2,7 @@
 
 All models are multi-tenant (tenant_id scoped).
 """
+
 from __future__ import annotations
 
 import uuid
@@ -30,7 +31,9 @@ class SeoKeyword(BaseModel):
     keyword: Mapped[str] = mapped_column(String(500), nullable=False)
     target_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     search_engine: Mapped[str] = mapped_column(
-        String(50), nullable=False, default="google"
+        String(50),
+        nullable=False,
+        default="google",
     )
     location: Mapped[str | None] = mapped_column(String(100), nullable=True)
     language: Mapped[str] = mapped_column(String(10), nullable=False, default="en")
@@ -40,7 +43,8 @@ class SeoKeyword(BaseModel):
     search_volume: Mapped[int | None] = mapped_column(Integer, nullable=True)
     difficulty_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     last_checked_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     def __repr__(self) -> str:

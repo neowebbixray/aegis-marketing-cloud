@@ -1,5 +1,4 @@
-"""
-FastAPI application factory for Aegis Marketing Cloud.
+"""FastAPI application factory for Aegis Marketing Cloud.
 
 Creates and configures the ASGI application with middleware, routers,
 exception handlers, and lifespan events.
@@ -12,16 +11,15 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
 
-from app.api.v1 import router as v1_router
 from app.api.graphql.schema import graphql_router
+from app.api.v1 import router as v1_router
 from app.config import settings
 from app.core.api_version import APIVersionMiddleware
-from app.core.config_validator import validate_config, halt_on_critical
+from app.core.config_validator import halt_on_critical, validate_config
 from app.core.csp import CSPMiddleware
 from app.core.exceptions import register_exception_handlers
 from app.core.metrics_middleware import PrometheusMetricsMiddleware
@@ -38,6 +36,7 @@ from app.database import engine
 def _configure_logging() -> None:
     # Load Vault secrets if Vault is running
     from app.vault import load_vault_secrets
+
     load_vault_secrets()
     # Existing logging config follows
 
@@ -73,7 +72,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         async with engine.connect() as conn:
             await conn.execute(
                 # Using a raw text query that works with asyncpg
-                __import__("sqlalchemy").text("SELECT 1")
+                __import__("sqlalchemy").text("SELECT 1"),
             )
         logger.info("Database connection pool established")
     except Exception as exc:
@@ -110,7 +109,7 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(
         title=settings.app_name,
-        version="0.1.0",
+        version="1.0.0",
         description="Aegis Marketing Cloud — Multi-tenant SaaS Marketing Platform API",
         lifespan=lifespan,
         docs_url="/docs" if settings.environment != "production" else None,
@@ -176,7 +175,7 @@ def create_app() -> FastAPI:
         try:
             async with engine.connect() as conn:
                 await conn.execute(
-                    __import__("sqlalchemy").text("SELECT 1")
+                    __import__("sqlalchemy").text("SELECT 1"),
                 )
         except Exception:
             db_ok = False
@@ -184,7 +183,7 @@ def create_app() -> FastAPI:
         return {
             "status": "healthy" if db_ok else "degraded",
             "app": settings.app_name,
-            "version": "0.1.0",
+            "version": "1.0.0",
             "database": "connected" if db_ok else "disconnected",
         }
 

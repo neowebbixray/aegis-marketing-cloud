@@ -1,22 +1,22 @@
-"""
-API v1 router collection.
-"""
+"""API v1 router collection."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter
 
 from app.api.v1 import (
-    ai,
     admin,
+    ai,
     analytics,
     auth,
     billing,
     crm,
     email,
+    gdpr,
     health,
     knowledge,
     knowledge_base,
+    marketing,
     marketplace,
     media,
     notifications,
@@ -26,7 +26,6 @@ from app.api.v1 import (
     tenants,
     webhooks,
     ws,
-    gdpr,
 )
 
 router = APIRouter(prefix="/api/v1")
@@ -36,6 +35,7 @@ router.include_router(auth.router)
 router.include_router(tenants.router)
 router.include_router(billing.router)
 router.include_router(crm.router)
+router.include_router(marketing.router)
 router.include_router(seo.router)
 router.include_router(social.router)
 router.include_router(analytics.router)

@@ -1,5 +1,4 @@
-"""
-Tests for the auth endpoints: registration, login, token refresh, and
+"""Tests for the auth endpoints: registration, login, token refresh, and
 protected endpoint access.
 
 Uses factory-based fixtures (``test_user``, ``test_auth_headers``) for

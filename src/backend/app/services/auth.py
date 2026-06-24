@@ -1,5 +1,4 @@
-"""
-Authentication service: registration, login, token refresh, API key management,
+"""Authentication service: registration, login, token refresh, API key management,
 and password changes.
 """
 
@@ -7,8 +6,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -62,6 +61,7 @@ class AuthService:
         Returns:
             A dict with ``access_token``, ``refresh_token``, ``token_type``,
             ``expires_in``, and ``user``.
+
         """
         # Check for duplicate email
         existing = await self.db.execute(select(User).where(User.email == email))
@@ -71,19 +71,10 @@ class AuthService:
         # Hash password
         pw_hash = hash_password(password)
 
-        # Create user
-        user = User(
-            email=email,
-            password_hash=pw_hash,
-            display_name=display_name,
-        )
-        self.db.add(user)
-        await self.db.flush()
-
-        # Create default tenant
+        # Create default tenant first (user needs a tenant_id)
         tenant = Tenant(
             name=tenant_name or f"{display_name}'s Organisation",
-            slug=tenant_name.lower().replace(" ", "-") if tenant_name else f"org-{user.id.hex[:8]}",
+            slug=tenant_name.lower().replace(" ", "-") if tenant_name else f"org-{uuid4().hex[:8]}",
         )
         self.db.add(tenant)
         await self.db.flush()
@@ -98,7 +89,7 @@ class AuthService:
         self.db.add(workspace)
         await self.db.flush()
 
-        # Create default Admin role and assign it
+        # Create default Admin role
         admin_role = Role(
             tenant_id=tenant.id,
             name="Admin",
@@ -108,6 +99,17 @@ class AuthService:
         self.db.add(admin_role)
         await self.db.flush()
 
+        # Create user (with tenant_id from the newly created tenant)
+        user = User(
+            email=email,
+            password_hash=pw_hash,
+            display_name=display_name,
+            tenant_id=tenant.id,
+        )
+        self.db.add(user)
+        await self.db.flush()
+
+        # Assign the user to the Admin role
         user_role = UserRole(
             user_id=user.id,
             role_id=admin_role.id,
@@ -147,6 +149,7 @@ class AuthService:
         Raises:
             UnauthorizedException: If credentials are invalid.
             ForbiddenException: If the account is inactive or MFA is required.
+
         """
         result = await self.db.execute(select(User).where(User.email == email))
         user = result.scalars().first()
@@ -170,7 +173,9 @@ class AuthService:
                 expires_delta=timedelta(minutes=5),
             )
             logger.info(
-                "MFA challenge %s issued for user %s", challenge_id, user.id
+                "MFA challenge %s issued for user %s",
+                challenge_id,
+                user.id,
             )
             return {
                 "mfa_required": True,
@@ -179,7 +184,7 @@ class AuthService:
             }
 
         # Update last_login
-        user.last_login_at = datetime.now(timezone.utc)
+        user.last_login_at = datetime.now(UTC)
         await self.db.flush()
 
         # Get default tenant & workspace for the user
@@ -208,6 +213,7 @@ class AuthService:
 
         Raises:
             UnauthorizedException: If the token is invalid, expired, or revoked.
+
         """
         try:
             payload = decode_token(refresh_token)
@@ -225,7 +231,7 @@ class AuthService:
             select(Session).where(
                 Session.refresh_token_hash == token_hash,
                 Session.revoked_at.is_(None),
-            )
+            ),
         )
         session = result.scalars().first()
 
@@ -233,13 +239,15 @@ class AuthService:
             raise UnauthorizedException(detail="Refresh token has been revoked or expired")
 
         # Revoke old session
-        session.revoked_at = datetime.now(timezone.utc)
+        session.revoked_at = datetime.now(UTC)
 
         # Issue new tokens
         new_access = create_access_token(subject=user_id)
         new_refresh = create_refresh_token(subject=user_id)
         await self._store_refresh_token(
-            UUID(user_id), session.tenant_id, new_refresh
+            UUID(user_id),
+            session.tenant_id,
+            new_refresh,
         )
 
         await self.db.commit()
@@ -253,13 +261,18 @@ class AuthService:
 
     # ── API Key Management ───────────────────────────────────────────────────
     async def create_api_key(
-        self, user_id: UUID, tenant_id: UUID, name: str, scopes: list[str] | None = None
+        self,
+        user_id: UUID,
+        tenant_id: UUID,
+        name: str,
+        scopes: list[str] | None = None,
     ) -> dict[str, Any]:
         """Generate a new API key for the user.
 
         Returns:
             A dict with the ``full_key`` (shown once), ``id``, ``name``,
             ``key_prefix``, ``scopes``, and ``created_at``.
+
         """
         full_key, prefix = generate_api_key()
         key_hash = hash_api_key(full_key)
@@ -291,7 +304,7 @@ class AuthService:
             select(ApiKey).where(
                 ApiKey.user_id == user_id,
                 ApiKey.revoked_at.is_(None),
-            )
+            ),
         )
         return list(result.scalars().all())
 
@@ -301,12 +314,12 @@ class AuthService:
             select(ApiKey).where(
                 ApiKey.id == api_key_id,
                 ApiKey.user_id == user_id,
-            )
+            ),
         )
         api_key = result.scalars().first()
         if api_key is None:
             raise NotFoundException(detail="API key not found")
-        api_key.revoked_at = datetime.now(timezone.utc)
+        api_key.revoked_at = datetime.now(UTC)
         await self.db.flush()
         await self.db.commit()
 
@@ -316,6 +329,7 @@ class AuthService:
 
         Raises:
             UnauthorizedException: If the token is invalid or the user not found.
+
         """
         try:
             payload = decode_token(token)
@@ -336,12 +350,16 @@ class AuthService:
 
     # ── Password Change ──────────────────────────────────────────────────────
     async def change_password(
-        self, user_id: UUID, current_password: str, new_password: str
+        self,
+        user_id: UUID,
+        current_password: str,
+        new_password: str,
     ) -> None:
         """Verify the current password and update to the new one.
 
         Raises:
             UnauthorizedException: If the current password is wrong.
+
         """
         result = await self.db.execute(select(User).where(User.id == user_id))
         user = result.scalars().first()
@@ -356,7 +374,7 @@ class AuthService:
             select(Session).where(
                 Session.user_id == user_id,
                 Session.revoked_at.is_(None),
-            )
+            ),
         )
         # NOTE: In production, batch-update sessions here
 
@@ -377,20 +395,21 @@ class AuthService:
         Returns:
             A dict with ``access_token``, ``refresh_token``, ``expires_in``,
             ``user_id``, ``email``, ``display_name``, and ``is_new_user``.
+
         """
         # Look for existing OAuth account link
         result = await self.db.execute(
             select(OAuthAccount).where(
                 OAuthAccount.provider == provider,
                 OAuthAccount.provider_account_id == provider_account_id,
-            )
+            ),
         )
         oauth_account = result.scalars().first()
 
         if oauth_account is not None:
             # Existing link — return tokens for the linked user
             user_result = await self.db.execute(
-                select(User).where(User.id == oauth_account.user_id)
+                select(User).where(User.id == oauth_account.user_id),
             )
             user = user_result.scalars().first()
             if user is None:
@@ -399,7 +418,7 @@ class AuthService:
         else:
             # Check if a user with this email already exists
             user_result = await self.db.execute(
-                select(User).where(User.email == email)
+                select(User).where(User.email == email),
             )
             user = user_result.scalars().first()
 
@@ -420,19 +439,10 @@ class AuthService:
                 random_pw = secrets.token_urlsafe(32)
                 pw_hash = hash_password(random_pw)
 
-                user = User(
-                    email=email,
-                    password_hash=pw_hash,
-                    display_name=display_name or email.split("@")[0],
-                    email_verified=True,
-                )
-                self.db.add(user)
-                await self.db.flush()
-
-                # Create a default tenant and workspace for the new user
+                # Create a default tenant and workspace for the new user FIRST
                 tenant = Tenant(
                     name=f"{display_name or email}'s Organisation",
-                    slug=f"org-{user.id.hex[:8]}",
+                    slug=f"org-{uuid4().hex[:8]}",
                 )
                 self.db.add(tenant)
                 await self.db.flush()
@@ -446,7 +456,7 @@ class AuthService:
                 self.db.add(workspace)
                 await self.db.flush()
 
-                # Create default role and assignment
+                # Create default role
                 admin_role = Role(
                     tenant_id=tenant.id,
                     name="Admin",
@@ -454,6 +464,17 @@ class AuthService:
                     is_system=True,
                 )
                 self.db.add(admin_role)
+                await self.db.flush()
+
+                # Create user (with tenant_id from the newly created tenant)
+                user = User(
+                    email=email,
+                    password_hash=pw_hash,
+                    display_name=display_name or email.split("@", maxsplit=1)[0],
+                    email_verified=True,
+                    tenant_id=tenant.id,
+                )
+                self.db.add(user)
                 await self.db.flush()
 
                 user_role = UserRole(
@@ -475,7 +496,7 @@ class AuthService:
                 is_new_user = True
 
         # Update last login
-        user.last_login_at = datetime.now(timezone.utc)
+        user.last_login_at = datetime.now(UTC)
         await self.db.flush()
 
         # Get tenant context
@@ -498,7 +519,7 @@ class AuthService:
         return {
             "access_token": access_token,
             "refresh_token": refresh_token,
-            "token_type": "bearer",
+            "token_type": "bearer",  # nosec B105
             "expires_in": settings.jwt_access_token_expire * 60,
             "user_id": user.id,
             "email": user.email,
@@ -509,12 +530,15 @@ class AuthService:
     # ── Helpers ──────────────────────────────────────────────────────────────
 
     async def _store_refresh_token(
-        self, user_id: UUID, tenant_id: UUID, raw_token: str
+        self,
+        user_id: UUID,
+        tenant_id: UUID,
+        raw_token: str,
     ) -> None:
         """Hash and persist a refresh token as a Session record."""
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
-        expires_at = datetime.now(timezone.utc) + timedelta(
-            minutes=settings.jwt_refresh_token_expire
+        expires_at = datetime.now(UTC) + timedelta(
+            minutes=settings.jwt_refresh_token_expire,
         )
         session = Session(
             user_id=user_id,
@@ -527,7 +551,7 @@ class AuthService:
     async def _get_user_context(self, user_id: UUID) -> tuple[UUID, UUID]:
         """Return the user's default (tenant_id, workspace_id)."""
         result = await self.db.execute(
-            select(UserRole).where(UserRole.user_id == user_id).limit(1)
+            select(UserRole).where(UserRole.user_id == user_id).limit(1),
         )
         user_role = result.scalars().first()
         if user_role is None:
@@ -535,7 +559,7 @@ class AuthService:
 
         # Get the tenant ID from the workspace
         ws_result = await self.db.execute(
-            select(Workspace).where(Workspace.id == user_role.workspace_id)
+            select(Workspace).where(Workspace.id == user_role.workspace_id),
         )
         ws = ws_result.scalars().first()
         if ws is None:

@@ -1,5 +1,4 @@
-"""
-Configuration validation for Aegis Marketing Cloud.
+"""Configuration validation for Aegis Marketing Cloud.
 
 Provides ``validate_config()`` called at startup to verify that all required
 environment variables are set and that production-critical settings are
@@ -59,6 +58,7 @@ def validate_config() -> list[str]:
 
     Returns:
         A list of warning / error messages.
+
     """
     messages: list[str] = []
 
@@ -66,7 +66,7 @@ def validate_config() -> list[str]:
     if settings.secret_key == "changeme":
         messages.append(
             "CRITICAL: SECRET_KEY is still set to the default 'changeme'. "
-            "Generate a cryptographically random value for production."
+            "Generate a cryptographically random value for production.",
         )
 
     if settings.environment == "production":
@@ -74,31 +74,31 @@ def validate_config() -> list[str]:
         if settings.debug:
             messages.append(
                 "CRITICAL: DEBUG is enabled in production environment. "
-                "Set DEBUG=false in your .env file."
+                "Set DEBUG=false in your .env file.",
             )
 
         if settings.cors_origins == ["*"] or "http://localhost" in str(settings.cors_origins):
             messages.append(
                 "WARNING: CORS_ORIGINS contains localhost entries in production. "
-                "Restrict to your actual domain(s)."
+                "Restrict to your actual domain(s).",
             )
 
         # Ensure database_url is not using the default dev credentials
         if "amc_secret" in settings.database_url or "changeme" in settings.database_url:
             messages.append(
                 "CRITICAL: DATABASE_URL still uses default/placeholder credentials. "
-                "Update with your production database credentials."
+                "Update with your production database credentials.",
             )
 
         # Ensure encryption key is set
         if not settings.encryption_key:
             messages.append(
                 "CRITICAL: ENCRYPTION_KEY is not set. This is required for "
-                "pgcrypto-based field encryption in production."
+                "pgcrypto-based field encryption in production.",
             )
 
     # ── 2. Check each required variable ───────────────────────────────────
-    for field_name, display_name, critical, condition_fn in _REQUIRED_VARS:
+    for field_name, display_name, critical, _condition_fn in _REQUIRED_VARS:
         value = getattr(settings, field_name, None)
         if value is None or (isinstance(value, str) and value.strip() in ("", "changeme")):
             if critical:
@@ -117,7 +117,7 @@ def validate_config() -> list[str]:
         if not dotenv.exists():
             messages.append(
                 "WARNING: No .env file found and AMC_ENV_FILE is not set. "
-                "Environment variables must be provided via the shell environment."
+                "Environment variables must be provided via the shell environment.",
             )
 
     # ── Log results ───────────────────────────────────────────────────────
@@ -138,6 +138,7 @@ def halt_on_critical(messages: list[str]) -> None:
 
     Args:
         messages: Output from ``validate_config()``.
+
     """
     criticals = [m for m in messages if m.startswith("CRITICAL")]
     if criticals:

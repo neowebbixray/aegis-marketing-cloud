@@ -1,19 +1,18 @@
-"""Content-Security-Policy (CSP) middleware for Aegis Marketing Cloud.
+"""Content-Security-Policy (CSP) ASGI middleware for Aegis Marketing Cloud.
 
 Sets strict CSP headers on every response to mitigate XSS, data injection,
 and other content-based attacks.  The policy is configurable via ``CSP_*``
 environment variables so operators can tighten or relax rules per deployment.
+
+Pure ASGI middleware (not BaseHTTPMiddleware) to avoid event-loop issues.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Awaitable
+from typing import Any
 
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
-from starlette.types import ASGIApp
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.config import settings
 
@@ -55,8 +54,8 @@ def _build_csp_value(directives: dict[str, str]) -> str:
     return "; ".join(parts)
 
 
-class CSPMiddleware(BaseHTTPMiddleware):
-    """ASGI middleware that attaches ``Content-Security-Policy`` headers.
+class CSPMiddleware:
+    """Pure ASGI middleware that attaches ``Content-Security-Policy`` headers.
 
     The policy is built from ``_DEFAULT_DIRECTIVES`` and can be overridden
     at runtime via ``settings.csp_directives`` (a dict) or individual
@@ -67,7 +66,7 @@ class CSPMiddleware(BaseHTTPMiddleware):
     """
 
     def __init__(self, app: ASGIApp) -> None:
-        super().__init__(app)
+        self.app = app
         self._directives: dict[str, str] = self._resolve_directives()
         self._header_value: str = _build_csp_value(self._directives)
         self._header_name: str = (
@@ -113,13 +112,22 @@ class CSPMiddleware(BaseHTTPMiddleware):
 
         return directives
 
-    async def dispatch(
-        self,
-        request: Request,
-        call_next: callable[[Request], Awaitable[Response]],
-    ) -> Response:
-        response = await call_next(request)
-        # Only add header to actual responses (skip streaming/informational)
-        if isinstance(response, Response) and self._header_name not in response.headers:
-            response.headers[self._header_name] = self._header_value
-        return response
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        header_name_bytes: bytes = self._header_name.encode("utf-8")
+        header_value_bytes: bytes = self._header_value.encode("utf-8")
+
+        async def send_wrapper(message: dict[str, Any]) -> None:
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                # Only add if not already set
+                has_header = any(h[0].lower() == header_name_bytes.lower() for h in headers)
+                if not has_header:
+                    headers.append((header_name_bytes, header_value_bytes))
+                message["headers"] = headers
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)

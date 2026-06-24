@@ -154,7 +154,7 @@ class SearchService:
                     rank=float(row[3]),
                     workspace_id=row[4],
                     extra={},
-                )
+                ),
             )
         return items
 
@@ -293,7 +293,7 @@ class SearchService:
                         "entity_type": etype,
                         "results": [item.model_dump() for item in items],
                         "total": total,
-                    }
+                    },
                 )
                 grand_total += total
 

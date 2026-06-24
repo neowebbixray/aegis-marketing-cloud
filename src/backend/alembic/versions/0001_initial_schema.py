@@ -12,17 +12,17 @@ Tables:
 """
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers
 revision: str = "0001"
-down_revision: Union[str, None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def create_uuid_psql_exension() -> None:
@@ -37,7 +37,7 @@ def upgrade() -> None:
     op.create_table(
         "users",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("email", sa.String(320), nullable=False, index=True),
+        sa.Column("email", sa.String(320), nullable=False),
         sa.Column("password_hash", sa.String(256), nullable=False),
         sa.Column("display_name", sa.String(256), nullable=False),
         sa.Column("avatar_url", sa.String(1024), nullable=True),
@@ -73,7 +73,7 @@ def upgrade() -> None:
     op.create_table(
         "sessions",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True),
+        sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("refresh_token_hash", sa.String(128), nullable=False),
         sa.Column("user_agent", sa.String(512), nullable=True),
@@ -105,7 +105,7 @@ def upgrade() -> None:
     op.create_table(
         "api_keys",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True),
+        sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=False, index=True),
         sa.Column("name", sa.String(256), nullable=False),
         sa.Column("key_prefix", sa.String(8), nullable=False),
@@ -124,7 +124,7 @@ def upgrade() -> None:
         "tenants",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("name", sa.String(256), nullable=False),
-        sa.Column("slug", sa.String(128), unique=True, nullable=False, index=True),
+        sa.Column("slug", sa.String(128), unique=True, nullable=False),
         sa.Column("domain", sa.String(256), nullable=True),
         sa.Column("settings", postgresql.JSONB, default=dict, nullable=True),
         sa.Column("features_enabled", postgresql.ARRAY(sa.Text), nullable=True),
@@ -139,7 +139,7 @@ def upgrade() -> None:
     op.create_table(
         "workspaces",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True),
+        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False),
         sa.Column("name", sa.String(256), nullable=False),
         sa.Column("slug", sa.String(128), nullable=False),
         sa.Column("settings", postgresql.JSONB, default=dict, nullable=True),
@@ -157,7 +157,7 @@ def upgrade() -> None:
     op.create_table(
         "teams",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True),
+        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False),
         sa.Column("workspace_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False),
         sa.Column("name", sa.String(256), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
@@ -182,7 +182,7 @@ def upgrade() -> None:
     op.create_table(
         "roles",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True),
+        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False),
         sa.Column("name", sa.String(128), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("is_system", sa.Boolean(), default=False, nullable=False),
@@ -230,8 +230,8 @@ def upgrade() -> None:
     op.create_table(
         "contacts",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=False, index=True),
-        sa.Column("workspace_id", postgresql.UUID(as_uuid=True), nullable=False, index=True),
+        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("workspace_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("first_name", sa.String(128), nullable=False),
         sa.Column("last_name", sa.String(128), nullable=False),
         sa.Column("email", sa.String(320), nullable=True, index=True),
@@ -255,7 +255,7 @@ def upgrade() -> None:
     op.create_table(
         "pipelines",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=False, index=True),
+        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("workspace_id", postgresql.UUID(as_uuid=True), nullable=False, index=True),
         sa.Column("name", sa.String(256), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
@@ -285,8 +285,8 @@ def upgrade() -> None:
     op.create_table(
         "deals",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=False, index=True),
-        sa.Column("workspace_id", postgresql.UUID(as_uuid=True), nullable=False, index=True),
+        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("workspace_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("name", sa.String(512), nullable=False),
         sa.Column("value", sa.Numeric(12, 2), default=0, nullable=True),
         sa.Column("currency", sa.String(3), default="USD", nullable=False),
@@ -309,8 +309,8 @@ def upgrade() -> None:
     op.create_table(
         "activities",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=False, index=True),
-        sa.Column("workspace_id", postgresql.UUID(as_uuid=True), nullable=False, index=True),
+        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("workspace_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("type", sa.String(16), nullable=False),
         sa.Column("subject", sa.String(512), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),

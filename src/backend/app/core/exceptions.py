@@ -1,5 +1,4 @@
-"""
-Custom exception classes and FastAPI exception handlers following
+"""Custom exception classes and FastAPI exception handlers following
 the AMC docs RFC 7807 specification.
 
 Docs spec says error format:
@@ -8,7 +7,7 @@ Docs spec says error format:
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
@@ -18,13 +17,13 @@ from app.schemas.base import FieldError, build_problem_response
 
 
 # ── Exception classes ────────────────────────────────────────────────────────
-class AppException(Exception):
+class AppException(Exception):  # noqa: N818  # base name kept for backward compat
     """Base application exception with optional detail and extra data."""
 
     status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR
     title: str = "Internal Server Error"
     detail: str = "An unexpected error occurred."
-    extra: Optional[dict[str, Any]] = None
+    extra: dict[str, Any] | None = None
 
     def __init__(
         self,
@@ -92,7 +91,7 @@ def _pydantic_validation_handler(
                 field=".".join(str(loc) for loc in err.get("loc", [])),
                 message=err.get("msg", "Validation error"),
                 code=err.get("type", "invalid"),
-            )
+            ),
         )
     return build_problem_response(
         status_code=422,

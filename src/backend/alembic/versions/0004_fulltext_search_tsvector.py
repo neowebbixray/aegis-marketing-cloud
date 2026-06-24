@@ -18,17 +18,17 @@ a weighted tsvector using ``setweight()``:
 
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers
 revision: str = "0004"
-down_revision: Union[str, None] = "0003"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "0003"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 # ── Trigger function ───────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ def _create_trigger_function() -> None:
         DECLARE
             v_tsv tsvector;
         BEGIN
-            v_tsv := '':tsvector;
+            v_tsv := to_tsvector('english', '');
 
             IF TG_TABLE_NAME = 'contacts' THEN
                 -- Weight A: first_name + last_name
@@ -81,7 +81,7 @@ def _create_trigger_function() -> None:
             RETURN NEW;
         END;
         $$ LANGUAGE plpgsql
-        """
+        """,
     )
 
 
@@ -94,7 +94,7 @@ def _create_contacts_trigger() -> None:
         ON contacts
         FOR EACH ROW
         EXECUTE FUNCTION amc_tsvector_update()
-        """
+        """,
     )
 
 
@@ -107,7 +107,7 @@ def _create_deals_trigger() -> None:
         ON deals
         FOR EACH ROW
         EXECUTE FUNCTION amc_tsvector_update()
-        """
+        """,
     )
 
 
@@ -120,7 +120,7 @@ def _create_campaigns_trigger() -> None:
         ON campaigns
         FOR EACH ROW
         EXECUTE FUNCTION amc_tsvector_update()
-        """
+        """,
     )
 
 
@@ -138,7 +138,7 @@ def _populate_contacts() -> None:
                 setweight(to_tsvector('english', coalesce(position, '')), 'C')
         )
         WHERE search_vector IS NULL
-        """
+        """,
     )
 
 
@@ -153,7 +153,7 @@ def _populate_deals() -> None:
                 setweight(to_tsvector('english', coalesce(organization_label, '')), 'B')
         )
         WHERE search_vector IS NULL
-        """
+        """,
     )
 
 
@@ -170,7 +170,7 @@ def _populate_campaigns() -> None:
                 setweight(to_tsvector('english', coalesce(channel, '')), 'B')
         )
         WHERE search_vector IS NULL
-        """
+        """,
     )
 
 

@@ -30,6 +30,9 @@ RUN pip install --no-cache-dir watchfiles
 # Copy source (will be overridden by volume mount in dev)
 COPY . .
 
+# Ensure entrypoint is executable
+RUN chmod +x scripts/entrypoint.sh
+
 EXPOSE 8000
 
 CMD ["uvicorn", "app.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000", "--reload-dir", "/app"]
@@ -47,10 +50,12 @@ CMD ["pytest", "tests/", "-v", "--cov=app", "--cov-report=term-missing"]
 # ── Production target ───────────────────────────────────────────────────────
 FROM base AS production
 
+# Copy the package files first (for layer caching)
+COPY pyproject.toml README.md ./
+COPY app/ app/
+
 # Install project in editable mode (runtime only)
 RUN pip install --no-cache-dir -e "."
-
-COPY . .
 
 # Create non-root user
 RUN groupadd -r amc && useradd -r -g amc -u 1000 amc \

@@ -1,5 +1,4 @@
-"""
-AI Router — agents, conversations, content generation, analysis, classification,
+"""AI Router — agents, conversations, content generation, analysis, classification,
 translation, summarisation, and execution history.
 
 All endpoints (unless noted) require an authenticated active user and tenant
@@ -9,7 +8,6 @@ and ``{data: {...}}`` for single resources.
 
 from __future__ import annotations
 
-from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -66,7 +64,7 @@ async def list_agents() -> dict:
         AgentListResponse(
             agents=[AgentDefinition(**a) for a in agents],
             total=len(agents),
-        )
+        ),
     )
 
 
@@ -80,7 +78,7 @@ async def get_agent(agent_type: str) -> dict:
         agent = AgentOrchestrator.get_agent(agent_type)
         return build_single_response(AgentDefinition(**agent))
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/agents/{agent_type}/execute")
@@ -275,7 +273,7 @@ async def analyze_content(
                 analysis_type="image_description",
                 image_prompt=result.get("image_prompt"),
                 alt_text=result.get("alt_text"),
-            )
+            ),
         )
 
     if body.campaign_id:
@@ -294,7 +292,7 @@ async def analyze_content(
         tenant_id=body.tenant_id,
         input_data={
             "prompt": f"Analyse the following content for quality, readability, "
-                      f"and SEO optimisation. Provide specific recommendations.\n\n{text_to_analyze}"
+            f"and SEO optimisation. Provide specific recommendations.\n\n{text_to_analyze}",
         },
     )
     output_content = analysis_result.get("output", {}).get("content", "")
@@ -312,7 +310,7 @@ async def analyze_content(
             analysis=output_content,
             analysis_type="content",
             suggestions=suggestions[:10] if suggestions else None,
-        )
+        ),
     )
 
 
@@ -391,7 +389,7 @@ async def get_execution_history(
             "agent_type": agent_type,
             "executions": [ExecutionHistoryResponse.model_validate(e) for e in items],
             "total": len(items),
-        }
+        },
     )
 
 

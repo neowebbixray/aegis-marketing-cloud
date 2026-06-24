@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
-  Webhook,
   Copy,
   RefreshCw,
   Send,
@@ -132,7 +131,7 @@ export default function WebhookDetailPage() {
         status: deliveryFilter !== 'all' ? (deliveryFilter as WebhookDeliveryStatus) : undefined,
       });
       setDeliveries(res.data);
-      setDeliveryTotal(res.meta.total);
+      setDeliveryTotal(res.meta?.total ?? 0);
     } catch {
       // silently fail — the deliveries table will be empty
       setDeliveries([]);

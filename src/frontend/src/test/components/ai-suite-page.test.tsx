@@ -36,10 +36,11 @@ vi.mock('@/lib/api/ai', () => ({
 const mockAgents: Agent[] = [
   {
     id: 'agent_1',
+    tenant_id: 'tenant_1',
     workspace_id: 'ws_1',
     name: 'Content Specialist',
     description: 'Generates marketing content',
-    capabilities: ['content_generation', 'email_composer'],
+    capabilities: ['content-generation', 'email_composer'] as Agent['capabilities'],
     status: 'idle',
     config: {},
     model: 'gpt-4',
@@ -52,10 +53,11 @@ const mockAgents: Agent[] = [
   },
   {
     id: 'agent_2',
+    tenant_id: 'tenant_1',
     workspace_id: 'ws_1',
     name: 'Sentiment Analyzer',
     description: 'Analyzes customer sentiment',
-    capabilities: ['sentiment_analysis', 'classification'],
+    capabilities: ['sentiment-analysis', 'classification'] as Agent['capabilities'],
     status: 'running',
     config: {},
     model: 'gpt-4-turbo',

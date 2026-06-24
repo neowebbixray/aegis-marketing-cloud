@@ -1,5 +1,4 @@
-"""
-Knowledge Base router: articles, categories, search, versioning.
+"""Knowledge Base router: articles, categories, search, versioning.
 
 All list responses use the docs-mandated ``{data, meta, links}`` envelope.
 All single-resource responses use ``{data: {...}}``.
@@ -17,13 +16,9 @@ from app.models.auth import User
 from app.schemas.base import build_list_response, build_single_response
 from app.schemas.knowledge_base import (
     ArticleCreate,
-    ArticleResponse,
     ArticleUpdate,
-    ArticleVersionResponse,
     CategoryCreate,
-    CategoryResponse,
     CategoryUpdate,
-    SearchResponse,
 )
 from app.services.knowledge_base import (
     ArticleService,
@@ -156,7 +151,6 @@ async def delete_article(
     tenant_id = await get_tenant_context(request, current_user=current_user)
     service = ArticleService(db)
     await service.delete_article(article_id, tenant_id=tenant_id)
-    return None
 
 
 @router.post("/articles/{article_id}/helpful")
@@ -174,7 +168,9 @@ async def mark_article_helpful(
     tenant_id = await get_tenant_context(request, current_user=current_user)
     service = ArticleService(db)
     await service.mark_helpful(
-        article_id, tenant_id=tenant_id, is_helpful=is_helpful,
+        article_id,
+        tenant_id=tenant_id,
+        is_helpful=is_helpful,
     )
     return build_single_response({"success": True})
 
@@ -278,7 +274,6 @@ async def delete_category(
     tenant_id = await get_tenant_context(request, current_user=current_user)
     service = CategoryService(db)
     await service.delete_category(category_id, tenant_id=tenant_id)
-    return None
 
 
 # ── Search ──────────────────────────────────────────────────────────────────

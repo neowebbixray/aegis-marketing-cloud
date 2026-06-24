@@ -22,6 +22,21 @@ import type {
   UpdateCustomFieldDefinitionRequest,
 } from '@/types';
 
+export type {
+  Contact,
+  CreateContactRequest,
+  UpdateContactRequest,
+  Activity,
+  Deal,
+  CreateDealRequest,
+  UpdateDealRequest,
+  Pipeline,
+  CreatePipelineRequest,
+  CustomFieldDefinition,
+  CreateCustomFieldDefinitionRequest,
+  UpdateCustomFieldDefinitionRequest,
+};
+
 // ─── Custom Field Definitions ─────────────────────────────
 
 export const customFieldsApi = {
@@ -270,8 +285,9 @@ export const pipelinesApi = {
     apiClient
       .put<void>(`/api/v1/crm/pipelines/${pipelineId}/stages/reorder`, {
         stage_ids: stageIds,
-      }),
-};
+      })
+      .then((data) => ({ data }))
+    };
 
 // ─── Activities ───────────────────────────────────────────
 

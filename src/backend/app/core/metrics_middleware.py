@@ -40,7 +40,7 @@ def _init_db_pool_metric() -> None:
     except Exception:
         # Fall back to configured limits when pool is not yet initialised
         DB_CONNECTION_ACTIVE.set(
-            settings.database_pool_size + settings.database_max_overflow
+            settings.database_pool_size + settings.database_max_overflow,
         )
 
 
@@ -59,11 +59,14 @@ class PrometheusMetricsMiddleware:
         if self._enabled:
             _init_db_pool_metric()
             logger.info(
-                "Prometheus metrics enabled — /metrics endpoint active"
+                "Prometheus metrics enabled — /metrics endpoint active",
             )
 
     async def __call__(
-        self, scope: Scope, receive: Receive, send: Send
+        self,
+        scope: Scope,
+        receive: Receive,
+        send: Send,
     ) -> None:
         # ── Pass-through when disabled ──────────────────────────────────
         if not self._enabled:
@@ -92,7 +95,7 @@ class PrometheusMetricsMiddleware:
                         "type": "http.response.start",
                         "status": 200,
                         "headers": headers,
-                    }
+                    },
                 )
                 await send({"type": "http.response.body", "body": data})
                 return
@@ -105,10 +108,13 @@ class PrometheusMetricsMiddleware:
                     status = message.get("status", 0)
                     elapsed = time.monotonic() - start
                     HTTP_REQUEST_COUNT.labels(
-                        method=method, endpoint=path, status=status
+                        method=method,
+                        endpoint=path,
+                        status=status,
                     ).inc()
                     HTTP_REQUEST_DURATION.labels(
-                        method=method, endpoint=path
+                        method=method,
+                        endpoint=path,
                     ).observe(elapsed)
                 await send(message)
 

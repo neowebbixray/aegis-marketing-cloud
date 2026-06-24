@@ -1,18 +1,15 @@
-"""
-Knowledge Base service: article management, categories, search indexing, versioning.
-"""
+"""Knowledge Base service: article management, categories, search indexing, versioning."""
 
 from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, func, or_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundException, ValidationException
+from app.core.exceptions import NotFoundException
 from app.models.marketing import Campaign
 from app.services.base import BaseService
 
@@ -125,8 +122,7 @@ class ArticleService(BaseService):
             "tenant_id": str(tenant_id),
             "workspace_id": str(workspace_id),
         }
-        logger.info("Created article '%s' (slug=%s) for workspace %s",
-                     title, slug, workspace_id)
+        logger.info("Created article '%s' (slug=%s) for workspace %s", title, slug, workspace_id)
         return article
 
     async def list_articles(

@@ -1,4 +1,9 @@
-import { apiClient, ApiError } from '@/lib/api';
+/// <reference types="vitest" />
+import { vi } from 'vitest';
+import { mockFetch } from '../setup';
+
+// Mock fetch globally using the mock from setup file
+vi.stubGlobal('fetch', mockFetch);
 
 // Mock the stores
 vi.mock('@/stores/auth-store', () => ({
@@ -31,19 +36,17 @@ function mockResponse(overrides: Partial<Response> = {}): Response {
   } as Response;
 }
 
+import { apiClient, ApiError } from '@/lib/api';
+
 describe('apiClient', () => {
   beforeEach(() => {
-    global.fetch = vi.fn();
-  });
-
-  afterEach(() => {
-    global.fetch = undefined as unknown as typeof global.fetch;
+    mockFetch.mockReset();
   });
 
   describe('GET requests', () => {
     it('makes a GET request to the correct endpoint', async () => {
       const responseData = { data: [{ id: '1', name: 'Test' }] };
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      mockFetch.mockResolvedValueOnce(
         mockResponse({
           ok: true,
           status: 200,
@@ -53,15 +56,15 @@ describe('apiClient', () => {
 
       const result = await apiClient.get('/api/v1/test');
 
-      expect(global.fetch).toHaveBeenCalledTimes(1);
-      const callUrl = vi.mocked(global.fetch).mock.calls[0][0] as string;
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const callUrl = mockFetch.mock.calls[0][0] as string;
       expect(callUrl).toContain('/api/v1/test');
       expect(callUrl).toContain('localhost');
       expect(result).toEqual(responseData);
     });
 
     it('adds query parameters to the URL', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      mockFetch.mockResolvedValueOnce(
         mockResponse({
           ok: true,
           json: vi.fn().mockResolvedValue({ items: [] }),
@@ -75,7 +78,7 @@ describe('apiClient', () => {
         active: true,
       });
 
-      const callUrl = vi.mocked(global.fetch).mock.calls[0][0] as string;
+      const callUrl = mockFetch.mock.calls[0][0] as string;
       expect(callUrl).toContain('page=1');
       expect(callUrl).toContain('limit=50');
       expect(callUrl).toContain('search=test');
@@ -83,7 +86,7 @@ describe('apiClient', () => {
     });
 
     it('skips undefined query parameters', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      mockFetch.mockResolvedValueOnce(
         mockResponse({ ok: true, json: vi.fn().mockResolvedValue({}) })
       );
 
@@ -92,7 +95,7 @@ describe('apiClient', () => {
         limit: undefined,
       });
 
-      const callUrl = vi.mocked(global.fetch).mock.calls[0][0] as string;
+      const callUrl = mockFetch.mock.calls[0][0] as string;
       expect(callUrl).toContain('page=1');
       expect(callUrl).not.toContain('limit');
     });
@@ -103,7 +106,7 @@ describe('apiClient', () => {
       const requestBody = { name: 'Test', email: 'test@example.com' };
       const responseData = { id: '1', ...requestBody };
 
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      mockFetch.mockResolvedValueOnce(
         mockResponse({
           ok: true,
           status: 201,
@@ -113,21 +116,21 @@ describe('apiClient', () => {
 
       const result = await apiClient.post('/api/v1/test', requestBody);
 
-      expect(global.fetch).toHaveBeenCalledTimes(1);
-      const [, options] = vi.mocked(global.fetch).mock.calls[0] as [string, RequestInit];
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
       expect(options.method).toBe('POST');
       expect(options.body).toBe(JSON.stringify(requestBody));
       expect(result).toEqual(responseData);
     });
 
     it('sends Content-Type header', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      mockFetch.mockResolvedValueOnce(
         mockResponse({ ok: true, json: vi.fn().mockResolvedValue({}) })
       );
 
       await apiClient.post('/api/v1/test', { key: 'value' });
 
-      const [, options] = vi.mocked(global.fetch).mock.calls[0] as [string, RequestInit];
+      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
       const headers = options.headers as Record<string, string>;
       expect(headers['Content-Type']).toBe('application/json');
     });
@@ -135,13 +138,13 @@ describe('apiClient', () => {
 
   describe('PUT requests', () => {
     it('makes a PUT request with JSON body', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      mockFetch.mockResolvedValueOnce(
         mockResponse({ ok: true, json: vi.fn().mockResolvedValue({}) })
       );
 
       await apiClient.put('/api/v1/test/1', { name: 'Updated' });
 
-      const [, options] = vi.mocked(global.fetch).mock.calls[0] as [string, RequestInit];
+      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
       expect(options.method).toBe('PUT');
       expect(options.body).toBe(JSON.stringify({ name: 'Updated' }));
     });
@@ -149,13 +152,13 @@ describe('apiClient', () => {
 
   describe('PATCH requests', () => {
     it('makes a PATCH request with JSON body', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      mockFetch.mockResolvedValueOnce(
         mockResponse({ ok: true, json: vi.fn().mockResolvedValue({}) })
       );
 
       await apiClient.patch('/api/v1/test/1', { field: 'value' });
 
-      const [, options] = vi.mocked(global.fetch).mock.calls[0] as [string, RequestInit];
+      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
       expect(options.method).toBe('PATCH');
       expect(options.body).toBe(JSON.stringify({ field: 'value' }));
     });
@@ -163,20 +166,20 @@ describe('apiClient', () => {
 
   describe('DELETE requests', () => {
     it('makes a DELETE request', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      mockFetch.mockResolvedValueOnce(
         mockResponse({ ok: true, status: 204, json: vi.fn().mockResolvedValue(undefined) })
       );
 
       await apiClient.delete('/api/v1/test/1');
 
-      const [, options] = vi.mocked(global.fetch).mock.calls[0] as [string, RequestInit];
+      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
       expect(options.method).toBe('DELETE');
     });
   });
 
   describe('error handling', () => {
     it('throws ApiError on 401 and calls logout', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      mockFetch.mockResolvedValueOnce(
         mockResponse({
           ok: false,
           status: 401,
@@ -194,7 +197,7 @@ describe('apiClient', () => {
     });
 
     it('throws ApiError on non-OK responses with error detail', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      mockFetch.mockResolvedValueOnce(
         mockResponse({
           ok: false,
           status: 422,
@@ -222,7 +225,7 @@ describe('apiClient', () => {
     });
 
     it('throws ApiError with status text when error JSON is malformed', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      mockFetch.mockResolvedValueOnce(
         mockResponse({
           ok: false,
           status: 500,
@@ -238,9 +241,7 @@ describe('apiClient', () => {
     });
 
     it('throws ApiError on network error', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-        new TypeError('Failed to fetch')
-      );
+      mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
 
       await expect(apiClient.get('/api/v1/test')).rejects.toMatchObject({
         status: 0,
@@ -249,7 +250,7 @@ describe('apiClient', () => {
     });
 
     it('handles 204 No Content response', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      mockFetch.mockResolvedValueOnce(
         mockResponse({
           ok: true,
           status: 204,
@@ -264,25 +265,25 @@ describe('apiClient', () => {
 
   describe('auth token injection', () => {
     it('injects Bearer token from auth store', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      mockFetch.mockResolvedValueOnce(
         mockResponse({ ok: true, json: vi.fn().mockResolvedValue({}) })
       );
 
       await apiClient.get('/api/v1/test');
 
-      const [, options] = vi.mocked(global.fetch).mock.calls[0] as [string, RequestInit];
+      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
       const headers = options.headers as Record<string, string>;
       expect(headers['Authorization']).toBe('Bearer mock-token-123');
     });
 
     it('injects X-Workspace-ID header', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      mockFetch.mockResolvedValueOnce(
         mockResponse({ ok: true, json: vi.fn().mockResolvedValue({}) })
       );
 
       await apiClient.get('/api/v1/test');
 
-      const [, options] = vi.mocked(global.fetch).mock.calls[0] as [string, RequestInit];
+      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
       const headers = options.headers as Record<string, string>;
       expect(headers['X-Workspace-ID']).toBe('workspace-1');
     });

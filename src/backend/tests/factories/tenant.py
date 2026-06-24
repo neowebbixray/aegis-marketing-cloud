@@ -1,5 +1,4 @@
-"""
-Factory classes for tenant / organisation models:
+"""Factory classes for tenant / organisation models:
 Tenant, Workspace, Role, UserRole.
 """
 
@@ -8,9 +7,8 @@ from __future__ import annotations
 import uuid
 
 import factory
-from factory.alchemy import SQLAlchemyModelFactory
-
 from app.models.tenant import Role, Tenant, UserRole, Workspace
+from factory.alchemy import SQLAlchemyModelFactory
 
 
 class BaseFactory(SQLAlchemyModelFactory):

@@ -1,29 +1,28 @@
-"""
-Pydantic schemas for the Analytics module: event tracking, metrics querying,
+"""Pydantic schemas for the Analytics module: event tracking, metrics querying,
 dashboards, and scheduled reports.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-
 # ── Event Tracking ───────────────────────────────────────────────────────────
+
 
 class EventCreate(BaseModel):
     """Payload for POST /analytics/events — track a single event."""
 
     event_name: str = Field(..., min_length=1, max_length=255)
     properties: dict[str, Any] = Field(default_factory=dict)
-    entity_type: Optional[str] = Field(None, max_length=100)
-    entity_id: Optional[UUID] = None
-    user_id: Optional[UUID] = None
-    session_id: Optional[str] = Field(None, max_length=255)
-    timestamp: Optional[datetime] = None  # defaults to server time
+    entity_type: str | None = Field(None, max_length=100)
+    entity_id: UUID | None = None
+    user_id: UUID | None = None
+    session_id: str | None = Field(None, max_length=255)
+    timestamp: datetime | None = None  # defaults to server time
 
 
 class EventResponse(BaseModel):
@@ -32,11 +31,11 @@ class EventResponse(BaseModel):
     id: UUID
     tenant_id: UUID
     event_name: str
-    properties: Optional[dict[str, Any]] = None
-    entity_type: Optional[str] = None
-    entity_id: Optional[UUID] = None
-    user_id: Optional[UUID] = None
-    session_id: Optional[str] = None
+    properties: dict[str, Any] | None = None
+    entity_type: str | None = None
+    entity_id: UUID | None = None
+    user_id: UUID | None = None
+    session_id: str | None = None
     timestamp: datetime
     created_at: datetime
 
@@ -55,13 +54,14 @@ class EventListResponse(BaseModel):
 
 # ── Metrics ──────────────────────────────────────────────────────────────────
 
+
 class MetricDefinition(BaseModel):
     """Definition of a tracked metric with its metadata."""
 
     name: str = Field(..., max_length=255)
     type: str = Field(default="counter")  # counter | gauge | histogram
-    description: Optional[str] = None
-    unit: Optional[str] = None
+    description: str | None = None
+    unit: str | None = None
     aggregation: str = Field(default="sum")  # sum | avg | min | max | count | distinct
 
 
@@ -72,7 +72,7 @@ class MetricQuery(BaseModel):
     granularity: str = Field(default="hour")  # hour | day | week | month
     start_date: datetime
     end_date: datetime
-    filters: Optional[dict[str, Any]] = None  # dimension filters
+    filters: dict[str, Any] | None = None  # dimension filters
 
 
 class MetricDataPoint(BaseModel):
@@ -80,20 +80,24 @@ class MetricDataPoint(BaseModel):
 
     timestamp: datetime
     value: float
-    dimensions: Optional[dict[str, Any]] = None
+    dimensions: dict[str, Any] | None = None
 
 
 # ── Dashboards ───────────────────────────────────────────────────────────────
 
+
 class WidgetConfig(BaseModel):
     """A single dashboard widget's inline configuration."""
 
-    widget_id: Optional[str] = None
+    widget_id: str | None = None
     type: str = Field(..., max_length=64)  # chart, number, table, etc.
     title: str = Field(..., max_length=128)
-    metric: Optional[str] = None
+    metric: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)
-    position: int = 0
+    position: dict[str, Any] = Field(
+        default_factory=lambda: {"x": 0, "y": 0, "w": 6, "h": 4},
+        description="Grid position: {x, y, w, h}",
+    )
     size: str = Field(default="medium", max_length=16)  # small, medium, large, full
 
 
@@ -101,16 +105,16 @@ class DashboardCreate(BaseModel):
     """Payload for POST /analytics/dashboards."""
 
     title: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = None
+    description: str | None = None
     widgets: list[WidgetConfig] = Field(default_factory=list)
 
 
 class DashboardUpdate(BaseModel):
     """Payload for PATCH /analytics/dashboards/{id}."""
 
-    title: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = None
-    widgets: Optional[list[WidgetConfig]] = None
+    title: str | None = Field(None, min_length=1, max_length=255)
+    description: str | None = None
+    widgets: list[WidgetConfig] | None = None
 
 
 class DashboardResponse(BaseModel):
@@ -119,9 +123,9 @@ class DashboardResponse(BaseModel):
     id: UUID
     tenant_id: UUID
     title: str
-    description: Optional[str] = None
-    widgets: Optional[list[dict[str, Any]]] = None  # data-enriched widgets
-    created_by: Optional[UUID] = None
+    description: str | None = None
+    widgets: list[dict[str, Any]] | None = None  # data-enriched widgets
+    created_by: UUID | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -130,23 +134,24 @@ class DashboardResponse(BaseModel):
 
 # ── Reports ──────────────────────────────────────────────────────────────────
 
+
 class ReportCreate(BaseModel):
     """Payload for creating a scheduled report definition."""
 
     title: str = Field(..., min_length=1, max_length=255)
     report_type: str = Field(..., max_length=100)
     config: dict[str, Any] = Field(default_factory=dict)
-    schedule: Optional[str] = Field(None, max_length=100)  # cron expression
-    recipients: Optional[list[str]] = None  # email addresses
+    schedule: str | None = Field(None, max_length=100)  # cron expression
+    recipients: list[str] | None = None  # email addresses
 
 
 class ReportUpdate(BaseModel):
     """Payload for updating a scheduled report."""
 
-    title: Optional[str] = Field(None, min_length=1, max_length=255)
-    config: Optional[dict[str, Any]] = None
-    schedule: Optional[str] = Field(None, max_length=100)
-    recipients: Optional[list[str]] = None
+    title: str | None = Field(None, min_length=1, max_length=255)
+    config: dict[str, Any] | None = None
+    schedule: str | None = Field(None, max_length=100)
+    recipients: list[str] | None = None
 
 
 class ReportResponse(BaseModel):
@@ -157,9 +162,9 @@ class ReportResponse(BaseModel):
     title: str
     report_type: str
     config: dict[str, Any]
-    schedule: Optional[str] = None
-    recipients: Optional[list[str]] = None
-    last_generated: Optional[datetime] = None
+    schedule: str | None = None
+    recipients: list[str] | None = None
+    last_generated: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -171,7 +176,7 @@ class ReportGenerateResponse(BaseModel):
 
     report_id: UUID
     status: str  # queued, generating, completed, failed
-    task_id: Optional[str] = None
+    task_id: str | None = None
     detail: str = "Report generation queued."
 
 
@@ -183,6 +188,7 @@ class ScheduleReportRequest(BaseModel):
 
 
 # ── Existing Campaign & Funnel Analytics (kept for backwards compat) ─────────
+
 
 class CampaignAnalyticsResponse(BaseModel):
     """Detailed analytics for a single campaign."""
@@ -197,14 +203,14 @@ class CampaignAnalyticsResponse(BaseModel):
     total_bounced: int = 0
     total_unsubscribed: int = 0
     total_converted: int = 0
-    open_rate: Optional[float] = None
-    click_through_rate: Optional[float] = None
-    conversion_rate: Optional[float] = None
-    bounce_rate: Optional[float] = None
-    revenue_generated: Optional[float] = None
-    roi: Optional[float] = None
-    daily_breakdown: Optional[list[dict[str, Any]]] = None
-    metadata: Optional[dict[str, Any]] = None
+    open_rate: float | None = None
+    click_through_rate: float | None = None
+    conversion_rate: float | None = None
+    bounce_rate: float | None = None
+    revenue_generated: float | None = None
+    roi: float | None = None
+    daily_breakdown: list[dict[str, Any]] | None = None
+    metadata: dict[str, Any] | None = None
 
     model_config = {"from_attributes": True}
 
@@ -216,10 +222,10 @@ class FunnelAnalyticsResponse(BaseModel):
     funnel_name: str
     total_entries: int = 0
     total_conversions: int = 0
-    overall_conversion_rate: Optional[float] = None
-    stages: Optional[list[dict[str, Any]]] = None
-    average_time_to_convert: Optional[float] = None
-    period_start: Optional[datetime] = None
-    period_end: Optional[datetime] = None
+    overall_conversion_rate: float | None = None
+    stages: list[dict[str, Any]] | None = None
+    average_time_to_convert: float | None = None
+    period_start: datetime | None = None
+    period_end: datetime | None = None
 
     model_config = {"from_attributes": True}

@@ -10,17 +10,17 @@ Tables:
 """
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers
 revision: str = "0003"
-down_revision: Union[str, None] = "0002"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "0002"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -41,7 +41,7 @@ def upgrade() -> None:
         sa.Column("from_name", sa.String(255), nullable=True),
         sa.Column("reply_to", sa.String(320), nullable=True),
         sa.Column("subject_override", sa.String(998), nullable=True),
-        sa.Column("status", sa.String(50), default="draft", nullable=False, index=True),
+        sa.Column("status", sa.String(50), default="draft", nullable=False),
         sa.Column("provider", sa.String(20), default="smtp", nullable=False),
         sa.Column("scheduled_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
@@ -81,15 +81,15 @@ def upgrade() -> None:
         sa.Column("from_email", sa.String(320), nullable=False),
         sa.Column("from_name", sa.String(255), nullable=True),
         sa.Column("reply_to", sa.String(320), nullable=True),
-        sa.Column("recipient_email", sa.String(320), nullable=False, index=True),
+        sa.Column("recipient_email", sa.String(320), nullable=False),
         sa.Column("recipient_name", sa.String(255), nullable=True),
         sa.Column("subject", sa.String(998), nullable=False),
         sa.Column("body_html", sa.Text(), nullable=True),
         sa.Column("body_text", sa.Text(), nullable=True),
-        sa.Column("status", sa.String(30), default="queued", nullable=False, index=True),
+        sa.Column("status", sa.String(30), default="queued", nullable=False),
         sa.Column("provider", sa.String(20), default="smtp", nullable=False),
         sa.Column("provider_message_id", sa.String(255), nullable=True),
-        sa.Column("tracking_id", sa.String(64), unique=True, nullable=True, index=True),
+        sa.Column("tracking_id", sa.String(64), unique=True, nullable=True),
         sa.Column("tracking_enabled", sa.Boolean(), default=True, nullable=False),
         sa.Column("opened_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("open_count", sa.Integer(), default=0, nullable=False),
@@ -119,14 +119,14 @@ def upgrade() -> None:
     # ── RLS policies (if pgcrypto extension is active) ─────────────────────
     for table_name in ("email_campaigns", "email_messages"):
         op.execute(
-            f"ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY"
+            f"ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY",
         )
         op.execute(
             f"""
             CREATE POLICY tenant_isolation_{table_name}
             ON {table_name}
             USING (tenant_id = current_setting('app.current_tenant_id')::uuid)
-            """
+            """,
         )
 
     # ── Audit trigger for email_campaigns (only; email_messages is high volume) ─
@@ -135,7 +135,7 @@ def upgrade() -> None:
         CREATE TRIGGER audit_email_campaigns
         AFTER INSERT OR UPDATE OR DELETE ON email_campaigns
         FOR EACH ROW EXECUTE FUNCTION audit_log_trigger()
-        """
+        """,
     )
 
 

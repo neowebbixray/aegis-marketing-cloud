@@ -1,5 +1,4 @@
-"""
-SSO / SAML enterprise authentication providers.
+"""SSO / SAML enterprise authentication providers.
 
 Provides:
 - SSOProvider abstract base class
@@ -20,6 +19,7 @@ logger = logging.getLogger("amc.sso")
 
 
 # ── Data classes ─────────────────────────────────────────────────────────────
+
 
 @dataclass
 class SSOUserInfo:
@@ -49,6 +49,7 @@ class SSOProviderConfig:
 
 # ── Abstract base ────────────────────────────────────────────────────────────
 
+
 class SSOProvider(ABC):
     """Abstract base for OAuth2 / OpenID Connect SSO providers."""
 
@@ -71,6 +72,7 @@ class SSOProvider(ABC):
 
 
 # ── Google OAuth ─────────────────────────────────────────────────────────────
+
 
 class GoogleOAuthProvider(SSOProvider):
     """Google OAuth 2.0 / OpenID Connect provider."""
@@ -142,6 +144,7 @@ class GoogleOAuthProvider(SSOProvider):
 
 # ── Microsoft OAuth (Azure AD) ───────────────────────────────────────────────
 
+
 class MicrosoftOAuthProvider(SSOProvider):
     """Microsoft Azure AD OAuth 2.0 / OpenID Connect provider."""
 
@@ -154,12 +157,8 @@ class MicrosoftOAuthProvider(SSOProvider):
             client_secret=settings.microsoft_oauth_client_secret or "",
             redirect_uri=settings.sso_redirect_uri,
             scope="openid email profile User.Read",
-            authorization_url=(
-                f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"
-            ),
-            token_url=(
-                f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
-            ),
+            authorization_url=(f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"),
+            token_url=(f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"),
             userinfo_url="https://graph.microsoft.com/v1.0/me",
         )
 
@@ -211,6 +210,7 @@ class MicrosoftOAuthProvider(SSOProvider):
 
 
 # ── GitHub OAuth ─────────────────────────────────────────────────────────────
+
 
 class GitHubOAuthProvider(SSOProvider):
     """GitHub OAuth 2.0 provider (no OpenID Connect)."""
@@ -296,6 +296,7 @@ class GitHubOAuthProvider(SSOProvider):
 
 # ── SAML Provider ────────────────────────────────────────────────────────────
 
+
 class SAMLProvider:
     """SAML 2.0 authentication provider using python3-saml (onelogin)."""
 
@@ -321,7 +322,7 @@ class SAMLProvider:
                     "binding": "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
                 },
                 "singleLogoutService": {
-                    "url": f"{self.sp_acs_url.rstrip('/callback')}/logout",
+                    "url": f"{self.sp_acs_url.removesuffix('/callback')}/logout",
                     "binding": "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
                 },
                 "x509cert": self.sp_x509_cert,
@@ -343,7 +344,7 @@ class SAMLProvider:
             from onelogin.saml2.auth import OneLogin_Saml2_Auth
         except ImportError:
             logger.error(
-                "python3-saml not installed. Install with: pip install python3-saml"
+                "python3-saml not installed. Install with: pip install python3-saml",
             )
             raise
 
@@ -366,7 +367,7 @@ class SAMLProvider:
             from onelogin.saml2.errors import OneLogin_Saml2_Error
         except ImportError:
             logger.error(
-                "python3-saml not installed. Install with: pip install python3-saml"
+                "python3-saml not installed. Install with: pip install python3-saml",
             )
             raise
 

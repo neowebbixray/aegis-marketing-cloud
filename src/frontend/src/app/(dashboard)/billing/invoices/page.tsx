@@ -76,8 +76,8 @@ export default function InvoicesPage() {
       if (statusFilter !== 'all') params.status = statusFilter;
       const res = await billingApi.listInvoices(params);
       setInvoices(res.data);
-      setTotal(res.meta.total);
-      setHasMore(res.meta.has_more);
+      setTotal(res.meta?.total ?? 0);
+      setHasMore(res.meta?.has_more ?? false);
     } catch (err) {
       console.error('Failed to load invoices:', err);
       toast.error('Failed to load invoices');
@@ -87,8 +87,9 @@ export default function InvoicesPage() {
   };
 
   useEffect(() => {
-    fetchInvoices();
-  }, [page, statusFilter]);
+      void fetchInvoices();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [page, statusFilter]);
 
   const handleDownloadInvoice = async (invoice: Invoice) => {
     try {

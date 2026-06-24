@@ -36,8 +36,8 @@ export function SidebarUserButton({ collapsed }: { collapsed: boolean }) {
           }
         >
           <Avatar className="h-8 w-8">
-            <AvatarImage src={user.avatar_url} />
-            <AvatarFallback>{getInitials(user.display_name)}</AvatarFallback>
+            <AvatarImage src={user.avatar_url ?? undefined} />
+            <AvatarFallback>{getInitials(user.display_name ?? '')}</AvatarFallback>
           </Avatar>
           {!collapsed && (
             <div className="flex-1 text-left">

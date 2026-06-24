@@ -1,10 +1,7 @@
-"""
-Pydantic schemas for SSO / SAML authentication endpoints.
-"""
+"""Pydantic schemas for SSO / SAML authentication endpoints."""
 
 from __future__ import annotations
 
-from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -27,10 +24,12 @@ class SSOInitiateResponse(BaseModel):
     """Response returned when initiating an SSO login flow."""
 
     authorization_url: str = Field(
-        ..., description="URL to redirect the user to for SSO authentication"
+        ...,
+        description="URL to redirect the user to for SSO authentication",
     )
     state: str = Field(
-        ..., description="OAuth state parameter for CSRF protection"
+        ...,
+        description="OAuth state parameter for CSRF protection",
     )
 
 
@@ -58,8 +57,10 @@ class SAMLLoginResponse(BaseModel):
     """Response returned when initiating a SAML login flow."""
 
     authorization_url: str = Field(
-        ..., description="SAML IdP redirect URL"
+        ...,
+        description="SAML IdP redirect URL",
     )
     request_id: str = Field(
-        ..., description="SAML request ID for tracking"
+        ...,
+        description="SAML request ID for tracking",
     )

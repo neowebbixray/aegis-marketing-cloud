@@ -13,25 +13,21 @@ Usage::
         template_variables={"name": "Alice"},
     )
 """
+
 from __future__ import annotations
 
 import asyncio
-import email.utils
-import hashlib
-import hmac
-import json
 import logging
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from io import BytesIO
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
-from urllib.parse import quote, urlparse
+from urllib.parse import quote
 from uuid import UUID
 
-from sqlalchemy import select, func, update as sa_update
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -45,16 +41,13 @@ logger = logging.getLogger("amc.services.email")
 # Constants
 # ─────────────────────────────────────────────────────────────────────────────
 
-TRACKING_PIXEL = (
-    "data:image/gif;base64,"
-    "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
-)
+TRACKING_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
 
 # Rate limiting: default max emails per minute per workspace
 DEFAULT_RATE_LIMIT = 60  # emails per minute
 
 
-class EmailDeliveryStatus(str, Enum):
+class EmailDeliveryStatus(StrEnum):
     """Possible delivery statuses for an email message."""
 
     QUEUED = "queued"
@@ -68,7 +61,7 @@ class EmailDeliveryStatus(str, Enum):
     FAILED = "failed"
 
 
-class BounceType(str, Enum):
+class BounceType(StrEnum):
     PERMANENT = "permanent"
     TRANSIENT = "transient"
     UNDETERMINED = "undetermined"
@@ -136,7 +129,7 @@ class EmailTemplateEngine:
             except ImportError:
                 logger.warning(
                     "Jinja2 not available — template rendering disabled. "
-                    "Install with: pip install jinja2"
+                    "Install with: pip install jinja2",
                 )
                 self._env = None
         return self._env
@@ -164,16 +157,8 @@ class EmailTemplateEngine:
         """
         vars = variables or {}
         subject = await self.render(template.subject, vars)
-        html = (
-            await self.render(template.body_html, vars)
-            if template.body_html
-            else None
-        )
-        text = (
-            await self.render(template.body_text, vars)
-            if template.body_text
-            else None
-        )
+        html = await self.render(template.body_html, vars) if template.body_html else None
+        text = await self.render(template.body_text, vars) if template.body_text else None
         return subject, html, text
 
 
@@ -191,7 +176,9 @@ def generate_tracking_id() -> str:
 
 
 def inject_tracking_pixel(
-    body_html: str, tracking_url: str, tracking_id: str
+    body_html: str,
+    tracking_url: str,
+    tracking_id: str,
 ) -> str:
     """Inject a 1x1 transparent tracking pixel just before ``</body>``.
 
@@ -211,12 +198,15 @@ def inject_tracking_pixel(
 
 
 def rewrite_links(
-    body_html: str, tracking_url: str, tracking_id: str
+    body_html: str,
+    tracking_url: str,
+    tracking_id: str,
 ) -> str:
     """Rewrite all ``href=`` links to go through the click tracking endpoint.
 
     Original URL is encoded as a query parameter.
     """
+
     def _replace_link(match: re.Match) -> str:
         prefix = match.group(1)
         url = match.group(2)
@@ -260,14 +250,12 @@ class RateLimiter:
         Returns ``True`` if under the limit, ``False`` if rate-limited.
         """
         key = self._key(workspace_id)
-        now = datetime.now(timezone.utc).timestamp()
+        now = datetime.now(UTC).timestamp()
         window = 60.0  # 1 minute
 
         # Prune entries outside the window
         if key in self._counts:
-            self._counts[key] = [
-                t for t in self._counts[key] if now - t < window
-            ]
+            self._counts[key] = [t for t in self._counts[key] if now - t < window]
 
         current_count = len(self._counts.get(key, []))
         return current_count < max_per_minute
@@ -275,7 +263,7 @@ class RateLimiter:
     def increment(self, workspace_id: UUID) -> None:
         """Record a send for *workspace_id*."""
         key = self._key(workspace_id)
-        now = datetime.now(timezone.utc).timestamp()
+        now = datetime.now(UTC).timestamp()
         if key not in self._counts:
             self._counts[key] = []
         self._counts[key].append(now)
@@ -283,11 +271,9 @@ class RateLimiter:
     def remaining(self, workspace_id: UUID, max_per_minute: int = DEFAULT_RATE_LIMIT) -> int:
         """Return remaining email capacity for this minute window."""
         key = self._key(workspace_id)
-        now = datetime.now(timezone.utc).timestamp()
+        now = datetime.now(UTC).timestamp()
         if key in self._counts:
-            self._counts[key] = [
-                t for t in self._counts[key] if now - t < 60.0
-            ]
+            self._counts[key] = [t for t in self._counts[key] if now - t < 60.0]
             used = len(self._counts[key])
         else:
             used = 0
@@ -321,9 +307,8 @@ class SMTPSender:
                 )
             except ImportError:
                 raise ImportError(
-                    "aiosmtplib is required for SMTP sending. "
-                    "Install: pip install aiosmtplib"
-                )
+                    "aiosmtplib is required for SMTP sending. Install: pip install aiosmtplib",
+                ) from None
         return self._client
 
     async def send(
@@ -342,10 +327,10 @@ class SMTPSender:
 
         msg = email.mime.multipart.MIMEMultipart("alternative")
         msg["From"] = email.utils.formataddr(
-            (email_data.from_name or "", email_data.from_email)
+            (email_data.from_name or "", email_data.from_email),
         )
         msg["To"] = email.utils.formataddr(
-            (email_data.to_name or "", email_data.to)
+            (email_data.to_name or "", email_data.to),
         )
         msg["Subject"] = email_data.subject
         if email_data.reply_to:
@@ -359,18 +344,18 @@ class SMTPSender:
         # Attach parts
         if email_data.body_text:
             msg.attach(
-                email.mime.text.MIMEText(email_data.body_text, "plain")
+                email.mime.text.MIMEText(email_data.body_text, "plain"),
             )
         if email_data.body_html:
             msg.attach(
-                email.mime.text.MIMEText(email_data.body_html, "html")
+                email.mime.text.MIMEText(email_data.body_html, "html"),
             )
 
         # Connect and send
         async with client:
             if settings.smtp_user and settings.smtp_password:
                 await client.login(settings.smtp_user, settings.smtp_password)
-            response = await client.send_message(msg)
+            await client.send_message(msg)
             # response is bytes or string; extract msg id if present
             return str(msg["Message-ID"])
 
@@ -403,9 +388,8 @@ class SESBackend:
                 self._client = session.client("sesv2")
             except ImportError:
                 raise ImportError(
-                    "boto3 is required for SES sending. "
-                    "Install: pip install boto3"
-                )
+                    "boto3 is required for SES sending. Install: pip install boto3",
+                ) from None
         return self._client
 
     async def send(
@@ -424,7 +408,7 @@ class SESBackend:
 
         if email_data.body_html:
             content["Body"] = {
-                "Html": {"Data": email_data.body_html, "Charset": "UTF-8"}
+                "Html": {"Data": email_data.body_html, "Charset": "UTF-8"},
             }
         if email_data.body_text:
             body = content.setdefault("Body", {})
@@ -434,7 +418,7 @@ class SESBackend:
         tags = []
         if email_data.tracking_id:
             tags.append(
-                {"Name": "tracking_id", "Value": email_data.tracking_id}
+                {"Name": "tracking_id", "Value": email_data.tracking_id},
             )
 
         # Run in thread executor since boto3 is synchronous
@@ -548,28 +532,33 @@ class EmailService:
         if template_id:
             template = await self._get_template(template_id, tenant_id)
             rendered = await _template_engine.render_template_model(
-                template, template_variables
+                template,
+                template_variables,
             )
             effective_subject, effective_html, effective_text = rendered
 
         # Validate we have at least one body
         if not effective_html and not effective_text:
             raise ValidationException(
-                detail="Either body_html or body_text (or a template) is required"
+                detail="Either body_html or body_text (or a template) is required",
             )
 
         # ── Tracking ──────────────────────────────────────────────────────
         tracking_id = generate_tracking_id() if tracking_enabled else None
         if tracking_enabled and effective_html:
             effective_html = inject_tracking_pixel(
-                effective_html, self.tracking_base_url, tracking_id
+                effective_html,
+                self.tracking_base_url,
+                tracking_id,
             )
             effective_html = rewrite_links(
-                effective_html, self.tracking_base_url, tracking_id
+                effective_html,
+                self.tracking_base_url,
+                tracking_id,
             )
 
         # ── Create message record ─────────────────────────────────────────
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         message = EmailMessage(
             tenant_id=tenant_id,
             workspace_id=workspace_id,
@@ -596,13 +585,18 @@ class EmailService:
 
         # ── Rate limiting check ───────────────────────────────────────────
         if workspace_id:
-            max_rate = settings.email_rate_limit if hasattr(settings, "email_rate_limit") else DEFAULT_RATE_LIMIT
+            max_rate = (
+                settings.email_rate_limit
+                if hasattr(settings, "email_rate_limit")
+                else DEFAULT_RATE_LIMIT
+            )
             if not _rate_limiter.check(workspace_id, max_per_minute=max_rate):
                 message.status = EmailDeliveryStatus.QUEUED.value
                 await self.db.flush()
                 logger.warning(
                     "Rate limited workspace %s — email %s queued",
-                    workspace_id, message.id,
+                    workspace_id,
+                    message.id,
                 )
                 return SendResult(
                     success=False,
@@ -636,7 +630,7 @@ class EmailService:
                 provider_msg_id = await self.smtp.send(email_data)
 
             message.status = EmailDeliveryStatus.SENT.value
-            message.sent_at = datetime.now(timezone.utc)
+            message.sent_at = datetime.now(UTC)
             message.provider_message_id = provider_msg_id
 
             if workspace_id:
@@ -646,7 +640,10 @@ class EmailService:
 
             logger.info(
                 "Email sent: id=%s to=%s provider=%s msg_id=%s",
-                message.id, to, provider, provider_msg_id,
+                message.id,
+                to,
+                provider,
+                provider_msg_id,
             )
 
             return SendResult(
@@ -659,13 +656,15 @@ class EmailService:
 
         except Exception as exc:
             message.status = EmailDeliveryStatus.FAILED.value
-            message.failed_at = datetime.now(timezone.utc)
+            message.failed_at = datetime.now(UTC)
             message.error_message = str(exc)
             await self.db.flush()
 
             logger.error(
                 "Email send failed: id=%s to=%s error=%s",
-                message.id, to, exc,
+                message.id,
+                to,
+                exc,
             )
 
             return SendResult(
@@ -708,7 +707,7 @@ class EmailService:
         Returns ``(campaign, results)``.
         """
         effective_from = from_email or settings.smtp_from
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Create campaign
         campaign = EmailCampaign(
@@ -744,7 +743,8 @@ class EmailService:
             if template_id:
                 template = await self._get_template(template_id, tenant_id)
                 rendered = await _template_engine.render_template_model(
-                    template, recipient_vars
+                    template,
+                    recipient_vars,
                 )
                 effective_subject, effective_html, effective_text = rendered
 
@@ -755,7 +755,7 @@ class EmailService:
                         message_id=uuid.uuid4(),
                         status="failed",
                         error_message="No body content",
-                    )
+                    ),
                 )
                 continue
 
@@ -787,36 +787,40 @@ class EmailService:
 
     async def _refresh_campaign_stats(self, campaign_id: UUID) -> None:
         """Recalculate aggregate stats for a campaign from its messages."""
-        stats = {
+        {
             "sent_count": func.count().filter(
-                EmailMessage.status.in_([
-                    EmailDeliveryStatus.SENT.value,
-                    EmailDeliveryStatus.DELIVERED.value,
-                    EmailDeliveryStatus.OPENED.value,
-                    EmailDeliveryStatus.CLICKED.value,
-                ])
+                EmailMessage.status.in_(
+                    [
+                        EmailDeliveryStatus.SENT.value,
+                        EmailDeliveryStatus.DELIVERED.value,
+                        EmailDeliveryStatus.OPENED.value,
+                        EmailDeliveryStatus.CLICKED.value,
+                    ]
+                ),
             ),
             "delivered_count": func.count().filter(
-                EmailMessage.status.in_([
-                    EmailDeliveryStatus.DELIVERED.value,
-                    EmailDeliveryStatus.OPENED.value,
-                    EmailDeliveryStatus.CLICKED.value,
-                ])
+                EmailMessage.status.in_(
+                    [
+                        EmailDeliveryStatus.DELIVERED.value,
+                        EmailDeliveryStatus.OPENED.value,
+                        EmailDeliveryStatus.CLICKED.value,
+                    ]
+                ),
             ),
             "bounced_count": func.count().filter(
-                EmailMessage.status == EmailDeliveryStatus.BOUNCED.value
+                EmailMessage.status == EmailDeliveryStatus.BOUNCED.value,
             ),
             "complained_count": func.count().filter(
-                EmailMessage.status == EmailDeliveryStatus.COMPLAINED.value
+                EmailMessage.status == EmailDeliveryStatus.COMPLAINED.value,
             ),
             "opened_count": func.count().filter(
-                EmailMessage.opened_at.isnot(None)
+                EmailMessage.opened_at.isnot(None),
             ),
             "clicked_count": func.count().filter(
-                EmailMessage.clicked_at.isnot(None)
+                EmailMessage.clicked_at.isnot(None),
             ),
             "failed_count": func.count().filter(
-                EmailMessage.status == EmailDeliveryStatus.FAILED.value
+                EmailMessage.status == EmailDeliveryStatus.FAILED.value,
             ),
         }
 
@@ -849,7 +853,7 @@ class EmailService:
                 GROUP BY campaign_id
             ) AS sub
             WHERE email_campaigns.id = :cid
-            """
+            """,
         )
         await self.db.execute(stmt, {"cid": campaign_id})
         await self.db.flush()
@@ -861,17 +865,14 @@ class EmailService:
 
         Returns ``True`` if the message was found and updated.
         """
-        stmt = (
-            select(EmailMessage)
-            .where(EmailMessage.tracking_id == tracking_id)
-        )
+        stmt = select(EmailMessage).where(EmailMessage.tracking_id == tracking_id)
         result = await self.db.execute(stmt)
         message = result.scalars().first()
         if message is None:
             logger.warning("Open tracking: unknown tracking_id %s", tracking_id)
             return False
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         message.open_count = (message.open_count or 0) + 1
         if message.opened_at is None:
             message.opened_at = now
@@ -885,23 +886,22 @@ class EmailService:
         return True
 
     async def record_click(
-        self, tracking_id: str, target_url: str
+        self,
+        tracking_id: str,
+        target_url: str,
     ) -> bool:
         """Record a click event for a tracked email.
 
         Returns ``True`` if the message was found and updated.
         """
-        stmt = (
-            select(EmailMessage)
-            .where(EmailMessage.tracking_id == tracking_id)
-        )
+        stmt = select(EmailMessage).where(EmailMessage.tracking_id == tracking_id)
         result = await self.db.execute(stmt)
         message = result.scalars().first()
         if message is None:
             logger.warning("Click tracking: unknown tracking_id %s", tracking_id)
             return False
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         message.click_count = (message.click_count or 0) + 1
         if message.clicked_at is None:
             message.clicked_at = now
@@ -939,13 +939,14 @@ class EmailService:
         )
         if message is None:
             logger.warning(
-                "Bounce notification: no matching message found "
-                "msg_id=%s tracking=%s recipient=%s",
-                message_id, tracking_id, recipient_email,
+                "Bounce notification: no matching message found msg_id=%s tracking=%s recipient=%s",
+                message_id,
+                tracking_id,
+                recipient_email,
             )
             return False
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         message.status = EmailDeliveryStatus.BOUNCED.value
         message.bounced_at = now
         message.bounce_type = bounce_type
@@ -959,7 +960,9 @@ class EmailService:
         await self.db.flush()
         logger.info(
             "Bounce recorded: msg_id=%s type=%s reason=%s",
-            message.id, bounce_type, bounce_reason,
+            message.id,
+            bounce_type,
+            bounce_reason,
         )
         return True
 
@@ -983,11 +986,13 @@ class EmailService:
             logger.warning(
                 "Complaint notification: no matching message found "
                 "msg_id=%s tracking=%s recipient=%s",
-                message_id, tracking_id, recipient_email,
+                message_id,
+                tracking_id,
+                recipient_email,
             )
             return False
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         message.status = EmailDeliveryStatus.COMPLAINED.value
         message.complained_at = now
         message.complaint_feedback_type = complaint_feedback_type or None
@@ -1000,7 +1005,8 @@ class EmailService:
         await self.db.flush()
         logger.info(
             "Complaint recorded: msg_id=%s type=%s",
-            message.id, complaint_feedback_type,
+            message.id,
+            complaint_feedback_type,
         )
         return True
 
@@ -1021,7 +1027,7 @@ class EmailService:
         if message is None:
             return False
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         message.status = EmailDeliveryStatus.DELIVERED.value
         message.delivered_at = now
         await self.db.flush()
@@ -1030,7 +1036,8 @@ class EmailService:
     # ── SES SNS webhook processing ────────────────────────────────────────
 
     async def process_sns_notification(
-        self, raw_payload: dict[str, Any]
+        self,
+        raw_payload: dict[str, Any],
     ) -> dict[str, Any]:
         """Process an SES SNS notification (bounce, complaint, delivery).
 
@@ -1167,7 +1174,9 @@ class EmailService:
         return items, total
 
     async def get_template(
-        self, template_id: UUID, tenant_id: UUID | None = None
+        self,
+        template_id: UUID,
+        tenant_id: UUID | None = None,
     ) -> EmailTemplate:
         """Get a single template by ID."""
         return await self._get_template(template_id, tenant_id)
@@ -1188,7 +1197,9 @@ class EmailService:
         return template
 
     async def delete_template(
-        self, template_id: UUID, tenant_id: UUID
+        self,
+        template_id: UUID,
+        tenant_id: UUID,
     ) -> None:
         """Soft-delete an email template."""
         template = await self._get_template(template_id, tenant_id)
@@ -1238,7 +1249,9 @@ class EmailService:
         return items, total
 
     async def get_delivery(
-        self, message_id: UUID, tenant_id: UUID
+        self,
+        message_id: UUID,
+        tenant_id: UUID,
     ) -> EmailMessage:
         """Get a single delivery record."""
         stmt = (
@@ -1285,7 +1298,9 @@ class EmailService:
         return items, total
 
     async def get_campaign(
-        self, campaign_id: UUID, tenant_id: UUID
+        self,
+        campaign_id: UUID,
+        tenant_id: UUID,
     ) -> EmailCampaign:
         """Get a single campaign."""
         stmt = (
@@ -1302,7 +1317,9 @@ class EmailService:
     # ── Internal helpers ──────────────────────────────────────────────────
 
     async def _get_template(
-        self, template_id: UUID, tenant_id: UUID | None = None
+        self,
+        template_id: UUID,
+        tenant_id: UUID | None = None,
     ) -> EmailTemplate:
         """Fetch an email template by ID, optionally scoped to tenant."""
         stmt = select(EmailTemplate).where(EmailTemplate.id == template_id)
@@ -1329,7 +1346,7 @@ class EmailService:
             stmt = (
                 select(EmailMessage)
                 .where(
-                    EmailMessage.provider_message_id == provider_message_id
+                    EmailMessage.provider_message_id == provider_message_id,
                 )
                 .order_by(EmailMessage.created_at.desc())
                 .limit(1)
@@ -1340,11 +1357,7 @@ class EmailService:
                 return msg
 
         if tracking_id:
-            stmt = (
-                select(EmailMessage)
-                .where(EmailMessage.tracking_id == tracking_id)
-                .limit(1)
-            )
+            stmt = select(EmailMessage).where(EmailMessage.tracking_id == tracking_id).limit(1)
             result = await self.db.execute(stmt)
             msg = result.scalars().first()
             if msg:

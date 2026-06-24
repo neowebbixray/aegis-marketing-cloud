@@ -29,8 +29,8 @@ def upgrade() -> None:
     op.create_table(
         "custom_field_definitions",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=False, index=True),
-        sa.Column("workspace_id", postgresql.UUID(as_uuid=True), nullable=False, index=True),
+        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("workspace_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("name", sa.String(128), nullable=False),
         sa.Column("key", sa.String(64), nullable=False, unique=True),
         sa.Column("description", sa.Text(), nullable=True),
@@ -42,11 +42,11 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        
+
         # Composite unique key for tenant + workspace + key
         sa.UniqueConstraint("tenant_id", "workspace_id", "key", name="uq_custom_field_definition_tenant_workspace_key"),
     )
-    
+
     # Create indexes
     op.create_index("ix_custom_field_definitions_tenant_id", "custom_field_definitions", ["tenant_id"])
     op.create_index("ix_custom_field_definitions_workspace_id", "custom_field_definitions", ["workspace_id"])
@@ -58,6 +58,6 @@ def downgrade() -> None:
     op.drop_index("ix_custom_field_definitions_is_active", table_name="custom_field_definitions")
     op.drop_index("ix_custom_field_definitions_workspace_id", table_name="custom_field_definitions")
     op.drop_index("ix_custom_field_definitions_tenant_id", table_name="custom_field_definitions")
-    
+
     # Drop table
     op.drop_table("custom_field_definitions")

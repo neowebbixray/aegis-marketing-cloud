@@ -1,6 +1,4 @@
-"""
-Tests for the knowledge base endpoints: documents, upload, search, indexing.
-"""
+"""Tests for the knowledge base endpoints: documents, upload, search, indexing."""
 
 from __future__ import annotations
 
@@ -158,7 +156,7 @@ async def test_search_documents(
     test_tenant,
 ) -> None:
     """A user can search indexed documents."""
-    doc = KnowledgeDocumentFactory(
+    KnowledgeDocumentFactory(
         tenant_id=test_tenant.id,
         title="Searchable Document",
         content="This document should appear in search results.",

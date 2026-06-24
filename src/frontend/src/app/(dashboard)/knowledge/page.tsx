@@ -263,7 +263,7 @@ export default function KnowledgeBasePage() {
 
       const res = await knowledgeApi.listDocuments(params as Parameters<typeof knowledgeApi.listDocuments>[0]);
       setDocuments(res.data);
-      setTotal(res.meta.total);
+      setTotal(res.meta?.total ?? 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load documents');
       setDocuments([]);

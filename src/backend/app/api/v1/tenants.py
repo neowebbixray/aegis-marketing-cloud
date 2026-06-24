@@ -1,6 +1,4 @@
-"""
-Tenant and workspace router.
-"""
+"""Tenant and workspace router."""
 
 from __future__ import annotations
 
@@ -10,7 +8,6 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_user, get_db, get_tenant_context
-from app.core.exceptions import NotFoundException
 from app.models.auth import User
 from app.models.tenant import PendingInvitation
 from app.schemas.tenant import (
@@ -143,7 +140,6 @@ async def remove_member(
     """Remove a user from a workspace."""
     service = TenantService(db)
     await service.remove_user(workspace_id=workspace_id, user_id=user_id)
-    return None
 
 
 # ── Roles ────────────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@
 
 Tenant-scoped: each tenant has its own subscription and billing.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -9,7 +10,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import DateTime, ForeignKey, Numeric, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,11 +22,17 @@ class Subscription(BaseModel, SoftDeleteMixin):
 
     __tablename__ = "subscriptions"
 
-    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     plan_id: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="inactive")
-    current_period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    current_period_start: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    current_period_end: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     trial_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     payment_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -40,9 +47,12 @@ class Invoice(BaseModel):
 
     __tablename__ = "invoices"
 
-    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     subscription_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("subscriptions.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("subscriptions.id", ondelete="SET NULL"),
+        nullable=True,
     )
     invoice_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
@@ -50,7 +60,9 @@ class Invoice(BaseModel):
     status: Mapped[str] = mapped_column(String(50), default="pending")
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     line_items: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True, default=list)
-    meta_data: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True, default=dict)
+    meta_data: Mapped[dict[str, Any] | None] = mapped_column(
+        "metadata", JSONB, nullable=True, default=dict
+    )
 
     def __repr__(self) -> str:
         return f"<Invoice {self.invoice_number}>"
@@ -62,7 +74,10 @@ class CreditWallet(BaseModel):
     __tablename__ = "credit_wallets"
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
     )
     balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     lifetime_credits: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
@@ -78,12 +93,16 @@ class UsageRecord(BaseModel):
     __tablename__ = "usage_records"
 
     subscription_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("subscriptions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     metric: Mapped[str] = mapped_column(String(100), nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    meta_data: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True, default=dict)
+    meta_data: Mapped[dict[str, Any] | None] = mapped_column(
+        "metadata", JSONB, nullable=True, default=dict
+    )
 
     def __repr__(self) -> str:
         return f"<UsageRecord {self.metric}: {self.quantity}>"

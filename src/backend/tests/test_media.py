@@ -1,6 +1,4 @@
-"""
-Tests for the media endpoints: upload, list, detail, update, delete.
-"""
+"""Tests for the media endpoints: upload, list, detail, update, delete."""
 
 from __future__ import annotations
 

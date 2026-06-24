@@ -1,5 +1,4 @@
-"""
-Application configuration via pydantic-settings.
+"""Application configuration via pydantic-settings.
 
 Loads environment variables from a .env file and provides a global ``settings``
 object that all application code imports from.
@@ -9,7 +8,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import List, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -63,7 +61,7 @@ class Settings(BaseSettings):
     jwt_refresh_token_expire: int = Field(default=10080, alias="JWT_REFRESH_TOKEN_EXPIRE")  # 7 days
 
     # ── CORS ─────────────────────────────────────────────────────────────────
-    cors_origins: List[str] = Field(
+    cors_origins: list[str] = Field(
         default=["http://localhost:3000", "http://localhost:5173"],
         alias="CORS_ORIGINS",
     )
@@ -82,7 +80,7 @@ class Settings(BaseSettings):
         return v
 
     # ── Encryption (pgcrypto) ────────────────────────────────────────────────
-    encryption_key: Optional[str] = Field(default=None, alias="ENCRYPTION_KEY")
+    encryption_key: str | None = Field(default=None, alias="ENCRYPTION_KEY")
 
     # ── Media / MinIO ───────────────────────────────────────────────────────────
     media_library_root: str = Field(
@@ -139,7 +137,7 @@ class Settings(BaseSettings):
         description=(
             "Full CSP directives dict override. If set, individual CSP_* env "
             "vars are ignored. Format: JSON object, e.g. "
-            '{"default-src": "''self''", "script-src": "''self''"}'
+            '{"default-src": "self", "script-src": "self"}'
         ),
     )
 
@@ -152,7 +150,9 @@ class Settings(BaseSettings):
     google_oauth_client_id: str | None = Field(default=None, alias="GOOGLE_OAUTH_CLIENT_ID")
     google_oauth_client_secret: str | None = Field(default=None, alias="GOOGLE_OAUTH_CLIENT_SECRET")
     microsoft_oauth_client_id: str | None = Field(default=None, alias="MICROSOFT_OAUTH_CLIENT_ID")
-    microsoft_oauth_client_secret: str | None = Field(default=None, alias="MICROSOFT_OAUTH_CLIENT_SECRET")
+    microsoft_oauth_client_secret: str | None = Field(
+        default=None, alias="MICROSOFT_OAUTH_CLIENT_SECRET"
+    )
     microsoft_oauth_tenant: str | None = Field(default=None, alias="MICROSOFT_OAUTH_TENANT")
     github_oauth_client_id: str | None = Field(default=None, alias="GITHUB_OAUTH_CLIENT_ID")
     github_oauth_client_secret: str | None = Field(default=None, alias="GITHUB_OAUTH_CLIENT_SECRET")
@@ -192,7 +192,7 @@ class Settings(BaseSettings):
     )
 
     # ── Trusted Hosts ────────────────────────────────────────────────────────
-    trusted_hosts: List[str] = Field(
+    trusted_hosts: list[str] = Field(
         default=["localhost", "127.0.0.1"],
         alias="TRUSTED_HOSTS",
     )
@@ -228,15 +228,18 @@ class Settings(BaseSettings):
 
     # ── Email Tracking ────────────────────────────────────────────────────────────
     email_tracking_url: str | None = Field(
-        default=None, alias="EMAIL_TRACKING_URL",
+        default=None,
+        alias="EMAIL_TRACKING_URL",
         description="Public base URL for email open/click tracking (e.g. https://api.amc.io)",
     )
     email_rate_limit: int = Field(
-        default=60, alias="EMAIL_RATE_LIMIT",
+        default=60,
+        alias="EMAIL_RATE_LIMIT",
         description="Max outbound emails per minute per workspace",
     )
     public_api_url: str = Field(
-        default="http://localhost:8000", alias="PUBLIC_API_URL",
+        default="http://localhost:8000",
+        alias="PUBLIC_API_URL",
         description="Public-facing API base URL",
     )
 
@@ -246,7 +249,9 @@ class Settings(BaseSettings):
 
     # ── OpenTelemetry ─────────────────────────────────────────────────────────────
     otel_service_name: str = Field(default="aegis-marketing-cloud", alias="OTEL_SERVICE_NAME")
-    otel_exporter_otlp_endpoint: str | None = Field(default=None, alias="OTEL_EXPORTER_OTLP_ENDPOINT")
+    otel_exporter_otlp_endpoint: str | None = Field(
+        default=None, alias="OTEL_EXPORTER_OTLP_ENDPOINT"
+    )
 
     # ── n8n Workflow Engine ──────────────────────────────────────────────────────
     n8n_url: str = Field(default="http://localhost:5678", alias="N8N_URL")

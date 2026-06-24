@@ -1,4 +1,5 @@
 """Workflow trigger tasks — bridges n8n with AMC backend."""
+
 from app.tasks import celery_app
 
 

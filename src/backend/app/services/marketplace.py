@@ -1,19 +1,18 @@
-"""
-Marketplace service: plugin/extension listings, installation management,
+"""Marketplace service: plugin/extension listings, installation management,
 billing integration, review system.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, func, desc, update as sa_update
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictException, NotFoundException, ValidationException
+from app.core.exceptions import ConflictException, NotFoundException
 from app.models.marketplace import MarketplaceInstallation
 from app.services.base import BaseService
 
@@ -79,11 +78,11 @@ class InstallationService(BaseService):
                 MarketplaceInstallation.workspace_id == workspace_id,
                 MarketplaceInstallation.listing_id == listing_id,
                 MarketplaceInstallation.status.in_(["installed", "active", "inactive"]),
-            )
+            ),
         )
         if existing.scalars().first():
             raise ConflictException(
-                detail="This listing is already installed in this workspace"
+                detail="This listing is already installed in this workspace",
             )
 
         installation = MarketplaceInstallation(
@@ -101,10 +100,16 @@ class InstallationService(BaseService):
 
         logger.info(
             "Installed listing %s in workspace %s (installation %s)",
-            listing_id, workspace_id, installation.id,
+            listing_id,
+            workspace_id,
+            installation.id,
         )
         # Simulate background installation task dispatch
-        logger.info("Installation task dispatched for listing %s (installation %s)", listing_id, installation.id)
+        logger.info(
+            "Installation task dispatched for listing %s (installation %s)",
+            listing_id,
+            installation.id,
+        )
 
         return {
             "id": str(installation.id),
@@ -115,7 +120,9 @@ class InstallationService(BaseService):
             "status": installation.status,
             "config": installation.config or {},
             "installed_by": str(installation.installed_by) if installation.installed_by else None,
-            "installed_at": installation.installed_at.isoformat() if installation.installed_at else None,
+            "installed_at": installation.installed_at.isoformat()
+            if installation.installed_at
+            else None,
         }
 
     async def uninstall(
@@ -131,14 +138,14 @@ class InstallationService(BaseService):
             select(MarketplaceInstallation).where(
                 MarketplaceInstallation.id == installation_id,
                 MarketplaceInstallation.tenant_id == tenant_id,
-            )
+            ),
         )
         installation = result.scalars().first()
         if installation is None:
             raise NotFoundException(detail="Installation not found")
 
         installation.status = "uninstalled"
-        installation.uninstalled_at = datetime.now(timezone.utc)
+        installation.uninstalled_at = datetime.now(UTC)
         await self.db.flush()
 
         logger.info("Uninstalled installation %s", installation_id)
@@ -160,11 +167,7 @@ class InstallationService(BaseService):
             filters.append(MarketplaceInstallation.status == status)
 
         # Count
-        count_stmt = (
-            select(func.count())
-            .select_from(MarketplaceInstallation)
-            .where(*filters)
-        )
+        count_stmt = select(func.count()).select_from(MarketplaceInstallation).where(*filters)
         total_result = await self.db.execute(count_stmt)
         total = total_result.scalar() or 0
 
@@ -205,7 +208,7 @@ class InstallationService(BaseService):
             select(MarketplaceInstallation).where(
                 MarketplaceInstallation.id == installation_id,
                 MarketplaceInstallation.tenant_id == tenant_id,
-            )
+            ),
         )
         installation = result.scalars().first()
         if installation is None:
@@ -219,8 +222,12 @@ class InstallationService(BaseService):
             "status": installation.status,
             "config": installation.config or {},
             "installed_by": str(installation.installed_by) if installation.installed_by else None,
-            "installed_at": installation.installed_at.isoformat() if installation.installed_at else None,
-            "uninstalled_at": installation.uninstalled_at.isoformat() if installation.uninstalled_at else None,
+            "installed_at": installation.installed_at.isoformat()
+            if installation.installed_at
+            else None,
+            "uninstalled_at": installation.uninstalled_at.isoformat()
+            if installation.uninstalled_at
+            else None,
         }
 
     async def update_config(
@@ -234,7 +241,7 @@ class InstallationService(BaseService):
             select(MarketplaceInstallation).where(
                 MarketplaceInstallation.id == installation_id,
                 MarketplaceInstallation.tenant_id == tenant_id,
-            )
+            ),
         )
         installation = result.scalars().first()
         if installation is None:
@@ -260,7 +267,7 @@ class InstallationService(BaseService):
             select(MarketplaceInstallation).where(
                 MarketplaceInstallation.id == installation_id,
                 MarketplaceInstallation.tenant_id == tenant_id,
-            )
+            ),
         )
         installation = result.scalars().first()
         if installation is None:

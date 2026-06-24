@@ -1,5 +1,4 @@
-"""
-RSA key management for RS256 JWT signing.
+"""RSA key management for RS256 JWT signing.
 
 Generates, loads, and caches RSA key pairs used for JWT creation and
 verification.  In production the private key should be stored in HashiCorp
@@ -10,13 +9,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.backends import default_backend
-
-from app.config import settings
 
 log = logging.getLogger(__name__)
 
@@ -75,14 +71,14 @@ def get_or_create_rsa_keypair(kid: str = "default") -> tuple[rsa.RSAPrivateKey, 
                     encoding=serialization.Encoding.PEM,
                     format=serialization.PrivateFormat.PKCS8,
                     encryption_algorithm=serialization.NoEncryption(),
-                )
+                ),
             )
         with open(pub_path, "wb") as f:
             f.write(
                 public_key.public_bytes(
                     encoding=serialization.Encoding.PEM,
                     format=serialization.PublicFormat.SubjectPublicKeyInfo,
-                )
+                ),
             )
 
     _private_key_cache[kid] = private_key
@@ -104,15 +100,11 @@ def get_public_key(kid: str = "default") -> rsa.RSAPublicKey:
 
 def get_jwks(kid: str = "default") -> dict:
     """Return a JWKS-compatible JSON dict for the current public key."""
-    from jose.constants import Algorithms
-    from jose.backends.cryptography_backend import CryptographyRSAKey
-
     public_key = get_public_key(kid)
     # Build the JWKS entry manually
     pub_numbers = public_key.public_numbers()
 
     import base64
-    import json
 
     def _int_to_base64url(n: int) -> str:
         """Encode an integer as a base64url-encoded big-endian byte string."""

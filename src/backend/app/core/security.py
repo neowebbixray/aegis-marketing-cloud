@@ -1,5 +1,4 @@
-"""
-Security utilities: JWT creation/verification (RS256), password hashing,
+"""Security utilities: JWT creation/verification (RS256), password hashing,
 API key generation, and ULID-style ID creation.
 
 The documentation mandates:
@@ -13,28 +12,30 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import uuid4
 
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
+from jose import jwt
 
 from app.config import settings
 from app.core.keys import get_private_key, get_public_key
 
-# ── Password context ─────────────────────────────────────────────────────────
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# ── Password hashing (bcrypt, cost factor 12) ────────────────────────────────
+_BCRYPT_ROUNDS = 12
 
 
 def hash_password(plain: str) -> str:
     """Return a bcrypt hash of *plain* (cost factor 12)."""
-    return _pwd_context.hash(plain, rounds=12)
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt(rounds=_BCRYPT_ROUNDS)).decode(
+        "utf-8"
+    )
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     """Return ``True`` if *plain* matches the bcrypt *hashed* value."""
-    return _pwd_context.verify(plain, hashed)
+    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 
 # ── JWT (RS256) ──────────────────────────────────────────────────────────────
@@ -58,8 +59,9 @@ def create_access_token(
 
     Returns:
         Encoded JWT string with headers ``{"alg": "RS256", "typ": "JWT", "kid": "<kid>"}``.
+
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if expires_delta is None:
         expires_delta = timedelta(minutes=settings.jwt_access_token_expire)
 
@@ -91,7 +93,7 @@ def create_refresh_token(
     expires_delta: timedelta | None = None,
 ) -> str:
     """Create an RS256-signed JWT refresh token (longer-lived, 7 days)."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if expires_delta is None:
         expires_delta = timedelta(minutes=settings.jwt_refresh_token_expire)
 
@@ -124,6 +126,7 @@ def decode_token(token: str) -> dict[str, Any]:
 
     Raises:
         jose.JWTError: If the token is expired, malformed, or signature invalid.
+
     """
     # Extract kid from the unverified header so we know which key to use
     from jose import jws

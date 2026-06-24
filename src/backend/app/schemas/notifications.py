@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
-from typing import Any, Optional
+from enum import StrEnum
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-
 # ── Notification Types ─────────────────────────────────────────────────────────
 
 
-class NotificationType(str, Enum):
+class NotificationType(StrEnum):
     """All supported notification types."""
 
     EMAIL_SENT = "email_sent"
@@ -89,7 +88,7 @@ class NotificationListResponse(BaseModel):
 # ── WebSocket Message Schemas ──────────────────────────────────────────────────
 
 
-class WebSocketMessageType(str, Enum):
+class WebSocketMessageType(StrEnum):
     """Types of messages sent over the WebSocket connection."""
 
     NOTIFICATION = "notification"
@@ -110,4 +109,12 @@ class WebSocketMessage(BaseModel):
     timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
     notification_id: str | None = None
 
-    model_config = {"json_schema_extra": {"example": {"type": "notification", "payload": {"title": "Email sent", "message": "Campaign completed"}, "timestamp": "2026-06-19T12:00:00Z"}}}
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "type": "notification",
+                "payload": {"title": "Email sent", "message": "Campaign completed"},
+                "timestamp": "2026-06-19T12:00:00Z",
+            }
+        }
+    }

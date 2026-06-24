@@ -1,6 +1,4 @@
-"""
-Tests for the analytics endpoints: events, metrics, dashboards, reports.
-"""
+"""Tests for the analytics endpoints: events, metrics, dashboards, reports."""
 
 from __future__ import annotations
 
@@ -12,9 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.factories.analytics import (
     AnalyticsDashboardFactory,
-    AnalyticsEventFactory,
     MetricSnapshotFactory,
-    ScheduledReportFactory,
 )
 
 

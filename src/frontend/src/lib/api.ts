@@ -17,11 +17,9 @@ import type {
   RegisterRequest,
   Workspace,
   Activity,
-  PaginationMeta,
 } from '@/types';
 
-// ─── API Error Class ──────────────────────────────────────
-
+// ─── API Error Class ──────────────────────────────────
 export class ApiError extends Error {
   status: number;
   detail: string;
@@ -36,29 +34,36 @@ export class ApiError extends Error {
   }
 }
 
-// ─── Backend Response Shapes ──────────────────────────────
-// The backend returns flat objects — not wrapped in {data: T}.
-// List endpoints use {items: T[], total, page, page_size}.
+// ─── Backend Response Shapes ──────────────────────────
+// The backend returns the envelope: { data, meta, links }
+// List endpoints: data = items[], meta = pagination, links = pagination links
+// Single endpoints: data = item
 
 interface BackendListResponse<T> {
-  items: T[];
-  total: number;
-  page: number;
-  page_size: number;
+  data: T[];
+  meta: {
+    page: number;
+    per_page: number;
+    total: number;
+    has_more: boolean;
+  };
+  links: {
+    self: string | null;
+    next: string | null;
+    prev: string | null;
+  };
 }
 
 function toPaginated<T>(backend: BackendListResponse<T>): PaginatedResponse<T> {
   return {
-    data: backend.items,
+    data: backend.data,
     meta: {
-      page: backend.page,
-      per_page: backend.page_size,
-      total: backend.total,
-      has_more: backend.page * backend.page_size < backend.total,
+      page: backend.meta.page,
+      per_page: backend.meta.per_page,
+      total: backend.meta.total,
+      has_more: backend.meta.has_more,
     },
-    links: {
-      self: '',
-    },
+    links: backend.links,
   };
 }
 
@@ -66,13 +71,12 @@ function toApiResponse<T>(item: T): ApiResponse<T> {
   return { data: item };
 }
 
-// ─── Fetch Wrapper ────────────────────────────────────────
-
+// ─── Fetch Wrapper ────────────────────────────────────
 type RequestOptions = {
   method?: string;
   headers?: Record<string, string>;
   body?: unknown;
-  params?: Record<string, string | number | boolean | undefined>;
+  params?: Record<string, string | number | boolean | string[] | undefined>;
 };
 
 const BASE_URL = ''; // Uses Next.js rewrites proxy
@@ -153,10 +157,9 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
   }
 }
 
-// ─── API Client ───────────────────────────────────────────
-
+// ─── API Client ───────────────────────────────────────
 export const apiClient = {
-  get: <T>(endpoint: string, params?: Record<string, string | number | boolean | undefined>) =>
+  get: <T>(endpoint: string, params?: Record<string, string | number | boolean | string[] | undefined>) =>
     request<T>(endpoint, { params }),
 
   post: <T>(endpoint: string, body?: unknown) =>
@@ -172,10 +175,9 @@ export const apiClient = {
     request<T>(endpoint, { method: 'DELETE' }),
 };
 
-// ─── Auth API ─────────────────────────────────────────────
+// ─── Auth API ─────────────────────────────────────────
 // Backend returns TokenResponse {access_token, refresh_token, token_type, expires_in}
 // for register/login/refresh, 204 for logout, UserResponse for /me.
-
 export const authApi = {
   login: (data: LoginRequest) =>
     apiClient.post<AuthTokens>('/api/v1/auth/login', data),
@@ -193,9 +195,9 @@ export const authApi = {
     apiClient.get<User>('/api/v1/auth/me'),
 };
 
-// ─── Tenant / Workspace API ───────────────────────────────
+// ─── Tenant / Workspace API ───────────────────────────
 // Backend tenant router is at /api/v1/tenants/workspaces
-
+// Returns list of workspaces (not envelope)
 export const workspaceApi = {
   list: () =>
     apiClient.get<Workspace[]>('/api/v1/tenants/workspaces'),
@@ -212,10 +214,9 @@ export const tenantApi = {
     apiClient.get('/api/v1/tenants/current'),
 };
 
-// ─── Contacts API ─────────────────────────────────────────
-// Backend returns ContactListResponse {items, total, page, page_size} for list/search
-// and raw ContactResponse for single items. We transform to PaginatedResponse/ApiResponse.
-
+// ─── Contacts API ─────────────────────────────────────
+// Backend returns envelope {data, meta, links} for list/search
+// and envelope {data: item} for single items.
 export const contactsApi = {
   list: (params?: {
     page?: number;
@@ -226,12 +227,11 @@ export const contactsApi = {
     owner_id?: string;
     sort?: string;
   }) => {
-    // Backend uses skip/limit not page/limit
-    const skip = params?.page && params?.limit ? (params.page - 1) * params.limit : 0;
+    // Backend uses page/limit (not skip/limit)
     return apiClient
       .get<BackendListResponse<Contact>>('/api/v1/crm/contacts', {
-        skip,
-        limit: params?.limit ?? 50,
+        ...(params?.page ? { page: params.page } : {}),
+        ...(params?.limit ? { limit: params.limit } : {}),
         ...(params?.search ? { search: params.search } : {}),
         ...(params?.stage ? { stage: params.stage } : {}),
         ...(params?.source ? { source: params.source } : {}),
@@ -240,31 +240,46 @@ export const contactsApi = {
   },
 
   get: (id: string) =>
-    apiClient.get<Contact>(`/api/v1/crm/contacts/${id}`).then(toApiResponse),
+    apiClient.get<BackendListResponse<Contact>>(`/api/v1/crm/contacts/${id}`).then(
+      (resp) => toApiResponse(resp.data[0])
+    ),
 
   create: (data: CreateContactRequest) =>
-    apiClient.post<Contact>('/api/v1/crm/contacts', data).then(toApiResponse),
+    apiClient.post<BackendListResponse<Contact>>('/api/v1/crm/contacts', data).then(
+      (resp) => toApiResponse(resp.data[0])
+    ),
 
   update: (id: string, data: UpdateContactRequest) =>
-    apiClient.patch<Contact>(`/api/v1/crm/contacts/${id}`, data).then(toApiResponse),
+    apiClient.patch<BackendListResponse<Contact>>(
+      `/api/v1/crm/contacts/${id}`,
+      data
+    ).then((resp) => toApiResponse(resp.data[0])),
 
   delete: (id: string) =>
     apiClient.delete<void>(`/api/v1/crm/contacts/${id}`),
 
-  search: (query: string, params?: { limit?: number; offset?: number }) =>
-    apiClient
-      .post<BackendListResponse<Contact>>('/api/v1/crm/contacts/search', {
-        ...params,
-        query,
-      })
-      .then(toPaginated),
+  search: (query: string, params?: { limit?: number; offset?: number }) => {
+    // Backend uses GET with query param and page/limit
+    return apiClient
+      .get<BackendListResponse<Contact>>('/api/v1/crm/contacts/search', {
+        q: query,
+        ...(params?.limit ? { limit: params.limit } : {}),
+        ...(params?.offset ? { offset: params.offset } : {}),
+      } as Record<string, string | number | boolean | undefined>)
+      .then(toPaginated);
+  },
 
   getActivities: (id: string) =>
-    apiClient.get<Activity[]>(`/api/v1/crm/contacts/${id}/activities`).then(toApiResponse),
+    apiClient.get<BackendListResponse<Activity>>(
+      `/api/v1/crm/contacts/${id}/activities`
+    ).then((resp) => ({
+      data: resp.data,
+      meta: resp.meta,
+      links: resp.links,
+    } as PaginatedResponse<Activity>)),
 };
 
-// ─── Deals API ────────────────────────────────────────────
-
+// ─── Deals API ────────────────────────────────────────
 export const dealsApi = {
   list: (params?: {
     page?: number;
@@ -274,52 +289,126 @@ export const dealsApi = {
     search?: string;
     sort?: string;
   }) => {
-    const skip = params?.page && params?.limit ? (params.page - 1) * params.limit : 0;
     return apiClient
       .get<BackendListResponse<Deal>>('/api/v1/crm/deals', {
-        skip,
-        limit: params?.limit ?? 50,
+        ...(params?.page ? { page: params.page } : {}),
+        ...(params?.limit ? { limit: params.limit } : {}),
         ...(params?.pipeline_id ? { pipeline_id: params.pipeline_id } : {}),
         ...(params?.stage ? { stage: params.stage } : {}),
+        ...(params?.search ? { search: params.search } : {}),
       } as Record<string, string | number | boolean | undefined>)
       .then(toPaginated);
   },
 
   get: (id: string) =>
-    apiClient.get<Deal>(`/api/v1/crm/deals/${id}`).then(toApiResponse),
+    apiClient.get<BackendListResponse<Deal>>(`/api/v1/crm/deals/${id}`).then(
+      (resp) => toApiResponse(resp.data[0])
+    ),
 
   create: (data: CreateDealRequest) =>
-    apiClient.post<Deal>('/api/v1/crm/deals', data).then(toApiResponse),
+    apiClient.post<BackendListResponse<Deal>>('/api/v1/crm/deals', data).then(
+      (resp) => toApiResponse(resp.data[0])
+    ),
 
   update: (id: string, data: UpdateDealRequest) =>
-    apiClient.patch<Deal>(`/api/v1/crm/deals/${id}`, data).then(toApiResponse),
+    apiClient.patch<BackendListResponse<Deal>>(
+      `/api/v1/crm/deals/${id}`,
+      data
+    ).then((resp) => toApiResponse(resp.data[0])),
 
   delete: (id: string) =>
     apiClient.delete<void>(`/api/v1/crm/deals/${id}`),
 };
 
-// ─── Pipelines API ────────────────────────────────────────
-
+// ─── Pipelines API ────────────────────────────────────
 export const pipelinesApi = {
   list: () =>
-    apiClient.get<Pipeline[]>('/api/v1/crm/pipelines').then(
-      (items) => toApiResponse(items) as unknown as { data: Pipeline[] }
+    apiClient.get<BackendListResponse<Pipeline>>('/api/v1/crm/pipelines').then(
+      (resp) => ({
+        data: resp.data,
+        meta: resp.meta,
+        links: resp.links,
+      } as PaginatedResponse<Pipeline>)
     ),
 
   get: (id: string) =>
-    apiClient.get<Pipeline>(`/api/v1/crm/pipelines/${id}`).then(toApiResponse),
+    apiClient.get<BackendListResponse<Pipeline>>(
+      `/api/v1/crm/pipelines/${id}`
+    ).then((resp) => toApiResponse(resp.data[0])),
 
   create: (data: CreatePipelineRequest) =>
-    apiClient.post<Pipeline>('/api/v1/crm/pipelines', data).then(toApiResponse),
+    apiClient.post<BackendListResponse<Pipeline>>(
+      '/api/v1/crm/pipelines',
+      data
+    ).then((resp) => toApiResponse(resp.data[0])),
 
   update: (id: string, data: Partial<CreatePipelineRequest>) =>
-    apiClient.patch<Pipeline>(`/api/v1/crm/pipelines/${id}`, data).then(toApiResponse),
+    apiClient.patch<BackendListResponse<Pipeline>>(
+      `/api/v1/crm/pipelines/${id}`,
+      data
+    ).then((resp) => toApiResponse(resp.data[0])),
 
   delete: (id: string) =>
     apiClient.delete<void>(`/api/v1/crm/pipelines/${id}`),
 
   reorderStages: (pipelineId: string, stageIds: string[]) =>
     apiClient
-      .put<Pipeline>(`/api/v1/crm/pipelines/${pipelineId}/stages/reorder`, { stage_ids: stageIds })
-      .then(toApiResponse),
+      .put<BackendListResponse<Pipeline>>(
+        `/api/v1/crm/pipelines/${pipelineId}/stages/reorder`,
+        { stage_ids: stageIds }
+      )
+      .then((resp) => toApiResponse(resp.data[0])),
+};
+
+// ─── Activities API ───────────────────────────────────
+export const activitiesApi = {
+  list: (params?: {
+    page?: number;
+    limit?: number;
+    type?: string;
+    subject?: string;
+    contact_id?: string;
+    deal_id?: string;
+    user_id?: string;
+    sort?: string;
+  }) => {
+    return apiClient
+      .get<BackendListResponse<Activity>>('/api/v1/crm/activities', {
+        ...(params?.page ? { page: params.page } : {}),
+        ...(params?.limit ? { limit: params.limit } : {}),
+        ...(params?.type ? { type: params.type } : {}),
+        ...(params?.subject ? { subject: params.subject } : {}),
+        ...(params?.contact_id ? { contact_id: params.contact_id } : {}),
+        ...(params?.deal_id ? { deal_id: params.deal_id } : {}),
+        ...(params?.user_id ? { user_id: params.user_id } : {}),
+      } as Record<string, string | number | boolean | undefined>)
+      .then(toPaginated);
+  },
+
+  get: (id: string) =>
+    apiClient.get<BackendListResponse<Activity>>(
+      `/api/v1/crm/activities/${id}`
+    ).then((resp) => toApiResponse(resp.data[0])),
+
+  create: (data: {
+    workspace_id: string;
+    type: string;
+    subject: string;
+    description?: string;
+    contact_id?: string;
+    deal_id?: string;
+    user_id?: string;
+  }) =>
+    apiClient.post<BackendListResponse<Activity>>('/api/v1/crm/activities', data).then(
+      (resp) => toApiResponse(resp.data[0])
+    ),
+
+  update: (id: string, data: Partial<{ type: string; subject: string; description?: string }>) =>
+    apiClient.patch<BackendListResponse<Activity>>(
+      `/api/v1/crm/activities/${id}`,
+      data
+    ).then((resp) => toApiResponse(resp.data[0])),
+
+  delete: (id: string) =>
+    apiClient.delete<void>(`/api/v1/crm/activities/${id}`),
 };

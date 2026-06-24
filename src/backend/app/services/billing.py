@@ -1,5 +1,4 @@
-"""
-Billing service: subscriptions, invoices, credit wallets, usage recording,
+"""Billing service: subscriptions, invoices, credit wallets, usage recording,
 Stripe webhook handling, and dunning (retry) logic.
 
 All tenant-scoped operations require a ``tenant_id`` UUID.
@@ -8,12 +7,12 @@ All tenant-scoped operations require a ``tenant_id`` UUID.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, func, desc, and_
+from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
@@ -62,16 +61,16 @@ class BillingService:
         existing = await self._get_active_subscription(tenant_id)
         if existing:
             raise ConflictException(
-                detail=f"Tenant {tenant_id} already has an active subscription ({existing.status})"
+                detail=f"Tenant {tenant_id} already has an active subscription ({existing.status})",
             )
 
         plan_id = plan_tier.lower()
         if plan_id not in PLAN_TIERS:
             raise ValidationException(
-                detail=f"Invalid plan tier '{plan_tier}'. Must be one of: {', '.join(sorted(PLAN_TIERS))}"
+                detail=f"Invalid plan tier '{plan_tier}'. Must be one of: {', '.join(sorted(PLAN_TIERS))}",
             )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         period_start = now
         period_end = now + timedelta(days=30)
         trial_end = None
@@ -116,7 +115,7 @@ class BillingService:
         if sub.status in ("cancelled", "cancel_at_period_end"):
             raise ConflictException(detail=f"Subscription {subscription_id} is already cancelled")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if immediate:
             sub.status = "cancelled"
             sub.cancelled_at = now
@@ -126,7 +125,9 @@ class BillingService:
         await self.db.flush()
         await self.db.refresh(sub)
         logger.info(
-            "Subscription %s cancelled (immediate=%s)", subscription_id, immediate
+            "Subscription %s cancelled (immediate=%s)",
+            subscription_id,
+            immediate,
         )
         return sub
 
@@ -146,17 +147,17 @@ class BillingService:
 
         if plan_id not in PLAN_TIERS:
             raise ValidationException(
-                detail=f"Invalid plan tier '{new_plan_tier}'. Must be one of: {', '.join(sorted(PLAN_TIERS))}"
+                detail=f"Invalid plan tier '{new_plan_tier}'. Must be one of: {', '.join(sorted(PLAN_TIERS))}",
             )
 
         if sub.status not in ("active", "trialing", "cancel_at_period_end"):
             raise ValidationException(
-                detail=f"Cannot change plan on subscription in status '{sub.status}'"
+                detail=f"Cannot change plan on subscription in status '{sub.status}'",
             )
 
         old_plan = sub.plan_id
-        new_price = PLAN_PRICES.get(plan_id, Decimal("0"))
-        old_price = PLAN_PRICES.get(old_plan, Decimal("0"))
+        new_price = PLAN_PRICES.get(plan_id, Decimal(0))
+        old_price = PLAN_PRICES.get(old_plan, Decimal(0))
 
         if new_price > old_price:
             # Upgrade — immediate
@@ -199,11 +200,11 @@ class BillingService:
         if not sub:
             raise NotFoundException(detail="No active subscription found for tenant")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         p_start = period_start or sub.current_period_start or now
         p_end = period_end or sub.current_period_end or (now + timedelta(days=30))
 
-        base_amount = PLAN_PRICES.get(sub.plan_id, Decimal("0"))
+        base_amount = PLAN_PRICES.get(sub.plan_id, Decimal(0))
 
         # Gather usage-based charges for the period
         usage_result = await self.db.execute(
@@ -216,19 +217,19 @@ class BillingService:
                     UsageRecord.subscription_id == sub.id,
                     UsageRecord.recorded_at >= p_start,
                     UsageRecord.recorded_at <= p_end,
-                )
+                ),
             )
-            .group_by(UsageRecord.metric)
+            .group_by(UsageRecord.metric),
         )
         usage_rows = usage_result.all()
-        usage_charges = Decimal("0")
+        usage_charges = Decimal(0)
         line_items: list[dict[str, Any]] = [
             {
                 "description": f"{sub.plan_id.title()} plan — base fee",
                 "amount": float(base_amount),
                 "quantity": 1,
                 "total": float(base_amount),
-            }
+            },
         ]
         for row in usage_rows:
             # Simple overage pricing: $0.10 per unit
@@ -240,7 +241,7 @@ class BillingService:
                     "amount": float(metric_total),
                     "quantity": float(row.total_qty),
                     "total": float(metric_total),
-                }
+                },
             )
 
         total_amount = base_amount + usage_charges
@@ -280,20 +281,22 @@ class BillingService:
         sub = await self._get_subscription(subscription_id)
         if sub.status not in ("active", "trialing"):
             raise ValidationException(
-                detail=f"Cannot record usage for subscription in status '{sub.status}'"
+                detail=f"Cannot record usage for subscription in status '{sub.status}'",
             )
 
         record = UsageRecord(
             subscription_id=subscription_id,
             metric=metric,
             quantity=quantity,
-            recorded_at=datetime.now(timezone.utc),
+            recorded_at=datetime.now(UTC),
             metadata=metadata or {},
         )
         self.db.add(record)
         await self.db.flush()
         await self.db.refresh(record)
-        logger.debug("Recorded usage %s=%.4f for subscription %s", metric, quantity, subscription_id)
+        logger.debug(
+            "Recorded usage %s=%.4f for subscription %s", metric, quantity, subscription_id
+        )
         return record
 
     # ── Credit Wallet ─────────────────────────────────────────────────────────
@@ -368,7 +371,7 @@ class BillingService:
                 and_(
                     Invoice.tenant_id == tenant_id,
                     Invoice.status.in_(["paid", "completed"]),
-                )
+                ),
             )
             .order_by(desc(Invoice.paid_at), desc(Invoice.created_at))
             .offset(offset)
@@ -381,7 +384,7 @@ class BillingService:
                 and_(
                     Invoice.tenant_id == tenant_id,
                     Invoice.status.in_(["paid", "completed"]),
-                )
+                ),
             )
         )
         count_result = await self.db.execute(count_stmt)
@@ -429,11 +432,11 @@ class BillingService:
         interval_hours = DUNNING_RETRY_INTERVALS_HOURS[
             min(retries, len(DUNNING_RETRY_INTERVALS_HOURS) - 1)
         ]
-        next_retry_at = datetime.now(timezone.utc) + timedelta(hours=interval_hours)
+        next_retry_at = datetime.now(UTC) + timedelta(hours=interval_hours)
 
         metadata["dunning_retries"] = retries + 1
         metadata["next_retry_at"] = next_retry_at.isoformat()
-        metadata["last_retry_at"] = datetime.now(timezone.utc).isoformat()
+        metadata["last_retry_at"] = datetime.now(UTC).isoformat()
         inv.metadata = metadata
 
         # Reset to pending so a background worker can retry
@@ -475,17 +478,16 @@ class BillingService:
 
         if event_type in ("invoice.paid", "invoice.payment_succeeded"):
             return await self._handle_invoice_paid(data_object)
-        elif event_type == "invoice.payment_failed":
+        if event_type == "invoice.payment_failed":
             return await self._handle_invoice_payment_failed(data_object)
-        elif event_type == "customer.subscription.updated":
+        if event_type == "customer.subscription.updated":
             return await self._handle_subscription_updated(data_object)
-        elif event_type == "customer.subscription.deleted":
+        if event_type == "customer.subscription.deleted":
             return await self._handle_subscription_deleted(data_object)
-        elif event_type == "customer.subscription.trial_will_end":
+        if event_type == "customer.subscription.trial_will_end":
             return {"status": "acknowledged", "detail": "Trial ending notification received."}
-        else:
-            logger.debug("Unhandled Stripe event type: %s", event_type)
-            return {"status": "ignored", "detail": f"Unhandled event type: {event_type}"}
+        logger.debug("Unhandled Stripe event type: %s", event_type)
+        return {"status": "ignored", "detail": f"Unhandled event type: {event_type}"}
 
     async def _handle_invoice_paid(self, obj: dict[str, Any]) -> dict[str, Any]:
         """Mark local invoice as paid when Stripe confirms payment."""
@@ -495,8 +497,8 @@ class BillingService:
         if subscription_id:
             result = await self.db.execute(
                 select(Subscription).where(
-                    Subscription.payment_provider_id == subscription_id
-                )
+                    Subscription.payment_provider_id == subscription_id,
+                ),
             )
             sub = result.scalars().first()
             if sub:
@@ -507,19 +509,22 @@ class BillingService:
                         and_(
                             Invoice.subscription_id == sub.id,
                             Invoice.status == "pending",
-                        )
+                        ),
                     )
                     .order_by(desc(Invoice.created_at))
-                    .limit(1)
+                    .limit(1),
                 )
                 inv = inv_result.scalars().first()
                 if inv:
                     inv.status = "paid"
-                    inv.paid_at = datetime.now(timezone.utc)
+                    inv.paid_at = datetime.now(UTC)
                     await self.db.flush()
                     logger.info("Invoice %s marked as paid (Stripe)", inv.invoice_number)
                     return {"status": "paid", "invoice_id": str(inv.id)}
-        return {"status": "acknowledged", "detail": f"Invoice {stripe_invoice_id} paid (no local match)"}
+        return {
+            "status": "acknowledged",
+            "detail": f"Invoice {stripe_invoice_id} paid (no local match)",
+        }
 
     async def _handle_invoice_payment_failed(self, obj: dict[str, Any]) -> dict[str, Any]:
         """Handle a failed payment notification from Stripe."""
@@ -528,8 +533,8 @@ class BillingService:
         if subscription_id:
             result = await self.db.execute(
                 select(Subscription).where(
-                    Subscription.payment_provider_id == subscription_id
-                )
+                    Subscription.payment_provider_id == subscription_id,
+                ),
             )
             sub = result.scalars().first()
             if sub:
@@ -539,10 +544,10 @@ class BillingService:
                         and_(
                             Invoice.subscription_id == sub.id,
                             Invoice.status == "pending",
-                        )
+                        ),
                     )
                     .order_by(desc(Invoice.created_at))
-                    .limit(1)
+                    .limit(1),
                 )
                 inv = inv_result.scalars().first()
                 if inv:
@@ -560,8 +565,8 @@ class BillingService:
         status = obj.get("status")
         result = await self.db.execute(
             select(Subscription).where(
-                Subscription.payment_provider_id == stripe_sub_id
-            )
+                Subscription.payment_provider_id == stripe_sub_id,
+            ),
         )
         sub = result.scalars().first()
         if sub and status:
@@ -576,13 +581,13 @@ class BillingService:
         stripe_sub_id = obj.get("id")
         result = await self.db.execute(
             select(Subscription).where(
-                Subscription.payment_provider_id == stripe_sub_id
-            )
+                Subscription.payment_provider_id == stripe_sub_id,
+            ),
         )
         sub = result.scalars().first()
         if sub:
             sub.status = "cancelled"
-            sub.cancelled_at = datetime.now(timezone.utc)
+            sub.cancelled_at = datetime.now(UTC)
             await self.db.flush()
             logger.info("Subscription %s cancelled via Stripe webhook", sub.id)
             return {"status": "cancelled", "subscription_id": str(sub.id)}
@@ -677,7 +682,9 @@ class BillingService:
         return items, total
 
     async def _get_invoice(
-        self, invoice_id: UUID, tenant_id: UUID | None = None
+        self,
+        invoice_id: UUID,
+        tenant_id: UUID | None = None,
     ) -> Invoice:
         """Fetch a single invoice by ID, optionally tenant-scoped."""
         stmt = select(Invoice).where(Invoice.id == invoice_id)
@@ -690,7 +697,9 @@ class BillingService:
         return inv
 
     async def _get_subscription(
-        self, subscription_id: UUID, tenant_id: UUID | None = None
+        self,
+        subscription_id: UUID,
+        tenant_id: UUID | None = None,
     ) -> Subscription:
         """Fetch a subscription by ID, optionally scoped to a tenant."""
         stmt = select(Subscription).where(Subscription.id == subscription_id)
@@ -703,7 +712,8 @@ class BillingService:
         return sub
 
     async def _get_active_subscription(
-        self, tenant_id: UUID
+        self,
+        tenant_id: UUID,
     ) -> Subscription | None:
         """Return the active/trialing subscription for a tenant, if any."""
         result = await self.db.execute(
@@ -711,15 +721,15 @@ class BillingService:
                 and_(
                     Subscription.tenant_id == tenant_id,
                     Subscription.status.in_(["active", "trialing", "cancel_at_period_end"]),
-                )
-            )
+                ),
+            ),
         )
         return result.scalars().first()
 
     async def _ensure_wallet(self, tenant_id: UUID) -> CreditWallet:
         """Return the existing wallet or create one."""
         result = await self.db.execute(
-            select(CreditWallet).where(CreditWallet.tenant_id == tenant_id)
+            select(CreditWallet).where(CreditWallet.tenant_id == tenant_id),
         )
         wallet = result.scalars().first()
         if wallet is None:

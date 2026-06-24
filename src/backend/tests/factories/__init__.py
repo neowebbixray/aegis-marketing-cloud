@@ -1,5 +1,4 @@
-"""
-Test factories package for Aegis Marketing Cloud.
+"""Test factories package for Aegis Marketing Cloud.
 
 Provides factory_boy-based factories that generate realistic test data
 for all domain models. All factories use ``SQLAlchemyModelFactory``

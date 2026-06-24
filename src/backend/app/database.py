@@ -1,5 +1,4 @@
-"""
-Async SQLAlchemy engine, session factory, and dependency helpers.
+"""Async SQLAlchemy engine, session factory, and dependency helpers.
 
 Provides the declarative ``Base``, an async ``engine``, and a session factory
 ``async_session_factory`` alongside the FastAPI dependency ``get_db``.
@@ -8,9 +7,7 @@ Provides the declarative ``Base``, an async ``engine``, and a session factory
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
-from typing import Any
 
-from sqlalchemy import NullPool
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,

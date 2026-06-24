@@ -1,6 +1,16 @@
 import { act, renderHook } from '@testing-library/react';
 import { useAuthStore } from '@/stores/auth-store';
 
+const makeMockUser = (overrides: Partial<{ id: string; email: string; display_name: string; roles: string[]; is_active: boolean }> = {}) => ({
+  id: 'user-1',
+  email: 'test@example.com',
+  name: 'Test User',
+  display_name: 'Test User',
+  roles: ['admin'],
+  is_active: true,
+  ...overrides,
+});
+
 describe('auth-store', () => {
   beforeEach(() => {
     // Reset the store state between tests
@@ -21,15 +31,7 @@ describe('auth-store', () => {
   it('login sets user, tokens, and authenticated state', () => {
     const { result } = renderHook(() => useAuthStore());
 
-    const mockUser = {
-      id: 'user-1',
-      email: 'test@example.com',
-      display_name: 'Test User',
-      roles: ['admin'],
-      is_active: true,
-      created_at: '2024-01-01T00:00:00Z',
-      updated_at: '2024-01-01T00:00:00Z',
-    };
+    const mockUser = makeMockUser();
 
     act(() => {
       result.current.login('access-token-123', 'refresh-token-456', mockUser);
@@ -44,25 +46,8 @@ describe('auth-store', () => {
   it('login replaces previous user data', () => {
     const { result } = renderHook(() => useAuthStore());
 
-    const firstUser = {
-      id: 'user-1',
-      email: 'first@example.com',
-      display_name: 'First User',
-      roles: ['user'],
-      is_active: true,
-      created_at: '2024-01-01T00:00:00Z',
-      updated_at: '2024-01-01T00:00:00Z',
-    };
-
-    const secondUser = {
-      id: 'user-2',
-      email: 'second@example.com',
-      display_name: 'Second User',
-      roles: ['admin'],
-      is_active: true,
-      created_at: '2024-02-01T00:00:00Z',
-      updated_at: '2024-02-01T00:00:00Z',
-    };
+    const firstUser = makeMockUser({ id: 'user-1', email: 'first@example.com', display_name: 'First User', roles: ['user'] });
+    const secondUser = makeMockUser({ id: 'user-2', email: 'second@example.com', display_name: 'Second User' });
 
     act(() => {
       result.current.login('token-1', 'refresh-1', firstUser);
@@ -82,15 +67,7 @@ describe('auth-store', () => {
 
     // First login
     act(() => {
-      result.current.login('token', 'refresh', {
-        id: 'user-1',
-        email: 'test@example.com',
-        display_name: 'Test User',
-        roles: ['admin'],
-        is_active: true,
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-01T00:00:00Z',
-      });
+      result.current.login('token', 'refresh', makeMockUser());
     });
     expect(result.current.isAuthenticated).toBe(true);
 
@@ -110,27 +87,11 @@ describe('auth-store', () => {
 
     // First login
     act(() => {
-      result.current.login('token-123', 'refresh-456', {
-        id: 'user-1',
-        email: 'test@example.com',
-        display_name: 'Test User',
-        roles: ['user'],
-        is_active: true,
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-01T00:00:00Z',
-      });
+      result.current.login('token-123', 'refresh-456', makeMockUser({ roles: ['user'] }));
     });
 
     // Update user
-    const updatedUser = {
-      id: 'user-1',
-      email: 'test@example.com',
-      display_name: 'Updated User',
-      roles: ['admin'],
-      is_active: true,
-      created_at: '2024-01-01T00:00:00Z',
-      updated_at: '2024-02-01T00:00:00Z',
-    };
+    const updatedUser = makeMockUser({ display_name: 'Updated User', roles: ['admin'] });
 
     act(() => {
       result.current.setUser(updatedUser);
@@ -147,15 +108,7 @@ describe('auth-store', () => {
     expect(result.current.isAuthenticated).toBe(false);
 
     act(() => {
-      result.current.setUser({
-        id: 'user-1',
-        email: 'test@example.com',
-        display_name: 'Test User',
-        roles: ['user'],
-        is_active: true,
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-01T00:00:00Z',
-      });
+      result.current.setUser(makeMockUser({ roles: ['user'] }));
     });
 
     expect(result.current.isAuthenticated).toBe(true);
@@ -164,18 +117,8 @@ describe('auth-store', () => {
   it('setTokens updates tokens without changing user', () => {
     const { result } = renderHook(() => useAuthStore());
 
-    const mockUser = {
-      id: 'user-1',
-      email: 'test@example.com',
-      display_name: 'Test User',
-      roles: ['user'],
-      is_active: true,
-      created_at: '2024-01-01T00:00:00Z',
-      updated_at: '2024-01-01T00:00:00Z',
-    };
-
     act(() => {
-      result.current.login('old-token', 'old-refresh', mockUser);
+      result.current.login('old-token', 'old-refresh', makeMockUser({ roles: ['user'] }));
     });
 
     act(() => {
@@ -205,27 +148,11 @@ describe('auth-store', () => {
     const { result } = renderHook(() => useAuthStore());
 
     act(() => {
-      result.current.login('token', 'refresh', {
-        id: 'user-1',
-        email: 'test@example.com',
-        display_name: 'Test User',
-        roles: ['user'],
-        is_active: true,
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-01T00:00:00Z',
-      });
+      result.current.login('token', 'refresh', makeMockUser({ roles: ['user'] }));
     });
 
     act(() => {
-      result.current.setUser({
-        id: 'user-1',
-        email: 'updated@example.com',
-        display_name: 'Updated User',
-        roles: ['admin'],
-        is_active: true,
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-02-01T00:00:00Z',
-      });
+      result.current.setUser(makeMockUser({ email: 'updated@example.com', display_name: 'Updated User', roles: ['admin'] }));
     });
 
     act(() => {

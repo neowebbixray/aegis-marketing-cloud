@@ -2,6 +2,7 @@
 
 All endpoints require authentication and tenant context.
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,7 +25,6 @@ from app.schemas.email import (
     SendBulkResponse,
     SendRequest,
     SendResponse,
-    TrackingResponse,
 )
 from app.services.email_service import EmailService
 
@@ -133,7 +133,7 @@ async def send_email(
     service = EmailService(db)
 
     result = await service.send_email(
-        to=body.to if isinstance(body.to, str) else body.to,
+        to=body.to,
         subject=body.subject,
         body_html=body.body_html,
         body_text=body.body_text,
@@ -156,7 +156,7 @@ async def send_email(
             message_id=result.message_id,
             tracking_id=result.tracking_id,
             status=result.status,
-        )
+        ),
     )
 
 
@@ -180,7 +180,7 @@ async def send_bulk(
 
     recipients = [
         {
-            "email": r.email if isinstance(r.email, str) else r.email,
+            "email": r.email,
             "name": r.name,
             "variables": r.variables,
         }
@@ -215,7 +215,7 @@ async def send_bulk(
             campaign_id=campaign.id,
             total_recipients=len(results),
             status=campaign.status,
-        )
+        ),
     )
 
 
@@ -290,13 +290,11 @@ async def create_template(
 
     if workspace_id == UUID(int=0):
         # Fall back: try to get default workspace
-        from app.models.tenant import UserRole
         from sqlalchemy import select
-        stmt = (
-            select(UserRole.workspace_id)
-            .where(UserRole.user_id == current_user.id)
-            .limit(1)
-        )
+
+        from app.models.tenant import UserRole
+
+        stmt = select(UserRole.workspace_id).where(UserRole.user_id == current_user.id).limit(1)
         result = await db.execute(stmt)
         row = result.first()
         if row:
@@ -346,7 +344,6 @@ async def delete_template(
     tenant_id = await get_tenant_context(request, current_user=current_user)
     service = EmailService(db)
     await service.delete_template(template_id, tenant_id=tenant_id)
-    return None
 
 
 # ── Deliveries / History ─────────────────────────────────────────────────────
@@ -522,9 +519,7 @@ async def track_open(
     # Return 1x1 transparent GIF
     from base64 import b64decode
 
-    pixel_b64 = (
-        "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
-    )
+    pixel_b64 = "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
     return b64decode(pixel_b64)
 
 

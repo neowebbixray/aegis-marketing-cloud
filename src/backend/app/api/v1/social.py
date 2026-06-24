@@ -1,5 +1,4 @@
-"""
-Social router: post scheduling, platform publishing, engagement metrics,
+"""Social router: post scheduling, platform publishing, engagement metrics,
 social listening.
 
 All list responses use the docs-mandated ``{data, meta, links}`` envelope.
@@ -19,10 +18,7 @@ from app.models.auth import User
 from app.schemas.base import build_list_response, build_single_response
 from app.schemas.social import (
     PostCreate,
-    PostResponse,
     PostUpdate,
-    SocialAnalyticsResponse,
-    MentionResponse,
 )
 from app.services.social import (
     SocialAnalyticsService,
@@ -150,7 +146,6 @@ async def delete_post(
     tenant_id = await get_tenant_context(request, current_user=current_user)
     service = SocialPostService(db)
     await service.delete_post(post_id, tenant_id=tenant_id)
-    return None
 
 
 @router.post("/posts/{post_id}/publish")

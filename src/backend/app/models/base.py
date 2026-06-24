@@ -1,5 +1,4 @@
-"""
-SQLAlchemy model mixins that provide common columns and behaviours:
+"""SQLAlchemy model mixins that provide common columns and behaviours:
 *   ``TimestampMixin`` — ``created_at`` / ``updated_at``
 *   ``SoftDeleteMixin`` — ``deleted_at``, ``is_deleted``, ``restore()``
 *   ``TenantMixin`` — ``tenant_id`` column
@@ -9,11 +8,10 @@ SQLAlchemy model mixins that provide common columns and behaviours:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, Uuid, func
-from sqlalchemy.orm import Mapped, declared_attr, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
@@ -56,7 +54,7 @@ class SoftDeleteMixin:
 
     def soft_delete(self) -> None:
         """Mark this record as deleted at the current UTC time."""
-        self.deleted_at = datetime.now(timezone.utc)
+        self.deleted_at = datetime.now(UTC)
 
 
 # ── TenantMixin ──────────────────────────────────────────────────────────────

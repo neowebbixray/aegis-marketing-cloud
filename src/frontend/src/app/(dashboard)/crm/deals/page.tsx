@@ -28,11 +28,11 @@ import type { Deal, Pipeline, PipelineStage } from '@/types';
 
 function DealCard({ deal }: { deal: Deal }) {
   const probabilityColor =
-    deal.probability >= 80
+    (deal.probability ?? 0) >= 80
       ? 'bg-success-500'
-      : deal.probability >= 50
+      : (deal.probability ?? 0) >= 50
       ? 'bg-warning-500'
-      : 'bg-muted-foreground/30';
+      : 'bg-destructive';
 
   return (
     <Card className="cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow">
@@ -42,7 +42,7 @@ function DealCard({ deal }: { deal: Deal }) {
           <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
         </div>
         <p className="text-lg font-bold text-primary">
-          {formatCurrency(deal.value, deal.currency)}
+          {formatCurrency(deal.value ?? 0, deal.currency)}
         </p>
         {deal.contact && (
           <p className="text-xs text-muted-foreground">
@@ -83,7 +83,7 @@ function PipelineColumn({
         <div className="flex items-center gap-2">
           <div
             className="w-2.5 h-2.5 rounded-full"
-            style={{ backgroundColor: stage.color }}
+            style={{ backgroundColor: stage.colour ?? undefined }}
           />
           <h3 className="font-semibold text-sm">{stage.name}</h3>
         </div>

@@ -1,5 +1,4 @@
-"""
-SEO router: keyword tracking, rank tracking, site audit, backlink analysis.
+"""SEO router: keyword tracking, rank tracking, site audit, backlink analysis.
 
 All list responses use the docs-mandated ``{data, meta, links}`` envelope.
 All single-resource responses use ``{data: {...}}``.
@@ -17,12 +16,7 @@ from app.models.auth import User
 from app.schemas.base import build_list_response, build_single_response
 from app.schemas.seo import (
     KeywordCreate,
-    KeywordResponse,
-    KeywordUpdate,
     SiteAuditCreate,
-    SiteAuditResponse,
-    BacklinkResponse,
-    BacklinkSummaryResponse,
 )
 from app.services.seo import BacklinkService, KeywordService, SiteAuditService
 
@@ -90,7 +84,10 @@ async def track_keyword(
         location=body.location,
         language=body.language,
         tags=body.tags,
-        **body.model_dump(exclude={"keyword", "target_url", "search_engine", "location", "language", "tags"}, exclude_none=True),
+        **body.model_dump(
+            exclude={"keyword", "target_url", "search_engine", "location", "language", "tags"},
+            exclude_none=True,
+        ),
     )
     return build_single_response(keyword)
 

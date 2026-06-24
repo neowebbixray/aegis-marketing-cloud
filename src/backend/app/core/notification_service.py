@@ -1,5 +1,4 @@
-"""
-Notification service — creates, queries, and manages in-app notifications.
+"""Notification service — creates, queries, and manages in-app notifications.
 
 Each notification is persisted to the database and (optionally) broadcast
 in real-time via the WebSocket ConnectionManager with Redis pub/sub so that
@@ -9,7 +8,7 @@ all worker processes can deliver the message to the right user or workspace.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -17,7 +16,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.notifications import Notification
-from app.schemas.notifications import NotificationCreate, NotificationType
+from app.schemas.notifications import NotificationType
 
 logger = logging.getLogger("amc.services.notification")
 
@@ -63,6 +62,7 @@ class NotificationService:
 
         Returns:
             The created ``Notification`` ORM instance.
+
         """
         if isinstance(notification_type, NotificationType):
             notification_type = notification_type.value
@@ -124,7 +124,7 @@ class NotificationService:
                     if notification.created_at
                     else None,
                 },
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "notification_id": str(notification.id),
             }
 
@@ -132,14 +132,13 @@ class NotificationService:
             await connection_manager.publish_notification(
                 user_id=str(notification.user_id),
                 message=ws_message,
-                workspace_id=str(notification.workspace_id)
-                if notification.workspace_id
-                else None,
+                workspace_id=str(notification.workspace_id) if notification.workspace_id else None,
             )
 
             # Also send directly to any locally-connected client
             await connection_manager.send_personal_message(
-                str(notification.user_id), ws_message
+                str(notification.user_id),
+                ws_message,
             )
 
         except Exception:
@@ -173,6 +172,7 @@ class NotificationService:
 
         Returns:
             A tuple of ``(notifications, total_count, unread_count)``.
+
         """
         # Build the base filter
         filters = [Notification.user_id == user_id]
@@ -198,9 +198,7 @@ class NotificationService:
         ]
         if workspace_id:
             unread_filters.append(Notification.workspace_id == workspace_id)
-        unread_stmt = (
-            select(func.count()).select_from(Notification).where(*unread_filters)
-        )
+        unread_stmt = select(func.count()).select_from(Notification).where(*unread_filters)
         unread_result = await self.db.execute(unread_stmt)
         unread_count = unread_result.scalar() or 0
 
@@ -219,7 +217,9 @@ class NotificationService:
         return notifications, total, unread_count
 
     async def get_notification(
-        self, notification_id: UUID, user_id: UUID
+        self,
+        notification_id: UUID,
+        user_id: UUID,
     ) -> Notification | None:
         """Get a single notification by ID, scoped to the user.
 
@@ -235,7 +235,9 @@ class NotificationService:
     # ── Mark Read ──────────────────────────────────────────────────────────────
 
     async def mark_read(
-        self, notification_id: UUID, user_id: UUID
+        self,
+        notification_id: UUID,
+        user_id: UUID,
     ) -> Notification | None:
         """Mark a single notification as read.
 
@@ -246,7 +248,7 @@ class NotificationService:
             return None
 
         notification.is_read = True
-        notification.read_at = datetime.now(timezone.utc)
+        notification.read_at = datetime.now(UTC)
         await self.db.flush()
         await self.db.commit()
         await self.db.refresh(notification)
@@ -266,6 +268,7 @@ class NotificationService:
 
         Returns:
             The number of notifications updated.
+
         """
         filters = [
             Notification.user_id == user_id,
@@ -279,7 +282,7 @@ class NotificationService:
             .where(*filters)
             .values(
                 is_read=True,
-                read_at=datetime.now(timezone.utc),
+                read_at=datetime.now(UTC),
             )
         )
         result = await self.db.execute(stmt)
@@ -296,7 +299,9 @@ class NotificationService:
     # ── Delete ─────────────────────────────────────────────────────────────────
 
     async def delete_notification(
-        self, notification_id: UUID, user_id: UUID
+        self,
+        notification_id: UUID,
+        user_id: UUID,
     ) -> bool:
         """Soft-delete a notification.
 

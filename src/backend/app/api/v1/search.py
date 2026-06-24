@@ -173,5 +173,5 @@ async def reindex_search(
         "data": {
             "message": "Search index rebuilt",
             "details": results,
-        }
+        },
     }

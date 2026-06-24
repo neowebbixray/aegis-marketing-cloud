@@ -3,6 +3,11 @@ import { useCallback } from 'react';
 import type { LoginRequest, RegisterRequest, User, AuthTokens } from '@/types';
 import { authApi } from './api';
 
+/** Standalone check — reads from the Zustand store directly. */
+export function isAuthenticated(): boolean {
+  return useAuthStore.getState().isAuthenticated;
+}
+
 export function useAuth() {
   const { user, isAuthenticated, login: storeLogin, logout: storeLogout } = useAuthStore();
 

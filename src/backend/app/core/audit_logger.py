@@ -1,5 +1,4 @@
-"""
-Application-level audit logging service for Aegis Marketing Cloud.
+"""Application-level audit logging service for Aegis Marketing Cloud.
 
 Records state-changing events (create, update, delete, login, logout, etc.)
 in the ``audit_logs`` table.  The table is already provisioned by the database
@@ -13,11 +12,11 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import ClauseElement, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("amc.audit")
@@ -71,9 +70,7 @@ EVENT_FEATURE_FLAG_TOGGLED = "feature_flag.toggled"
 
 # ── All recognised event types (used for validation) ─────────────────────────
 ALL_EVENT_TYPES: set[str] = {
-    value
-    for name, value in list(globals().items())
-    if name.startswith("EVENT_")
+    value for name, value in list(globals().items()) if name.startswith("EVENT_")
 }
 
 
@@ -101,7 +98,7 @@ def _compute_changes(
             continue
         if b_json != a_json:
             changed.append(key)
-    return changed if changed else None
+    return changed or None
 
 
 class AuditLogService:
@@ -162,6 +159,7 @@ class AuditLogService:
 
         Raises:
             ValueError: If ``action`` is not a recognised event type.
+
         """
         if action not in ALL_EVENT_TYPES:
             logger.warning("Unrecognised audit event type: %s", action)
@@ -174,10 +172,7 @@ class AuditLogService:
         if changes is not None:
             # Determine if changes is ``{field: (old, new)}`` or ``{field: value}``
             sample_val = next(iter(changes.values()), None)
-            if (
-                isinstance(sample_val, (list, tuple))
-                and len(sample_val) == 2
-            ):
+            if isinstance(sample_val, (list, tuple)) and len(sample_val) == 2:
                 # Update-style: {field: (old, new)}
                 old_values = {}
                 new_values = {}
@@ -290,7 +285,7 @@ class AuditLogService:
                 changed_fields, ip_address, user_agent, request_id,
                 created_at
             FROM audit_logs
-            WHERE {' AND '.join(clauses)}
+            WHERE {" AND ".join(clauses)}
             ORDER BY created_at {order}
             LIMIT :limit OFFSET :offset
         """)
@@ -327,7 +322,8 @@ class AuditLogService:
 
     async def count_events(self, **kwargs: Any) -> int:
         """Return the count of matching audit events (same filters as
-        ``get_events``)."""
+        ``get_events``).
+        """
         clauses: list[str] = ["1=1"]
         params: dict[str, Any] = {}
 
@@ -346,7 +342,7 @@ class AuditLogService:
 
         stmt = text(f"""
             SELECT COUNT(*) FROM audit_logs
-            WHERE {' AND '.join(clauses)}
+            WHERE {" AND ".join(clauses)}
         """)
         result = await self.db.execute(stmt, params)
         return result.scalar() or 0

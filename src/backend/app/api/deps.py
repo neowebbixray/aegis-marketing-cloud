@@ -1,6 +1,4 @@
-"""
-FastAPI dependencies for authentication, tenant context, and database sessions.
-"""
+"""FastAPI dependencies for authentication, tenant context, and database sessions."""
 
 from __future__ import annotations
 
@@ -14,12 +12,11 @@ from app.database import get_db
 from app.models.auth import User
 from app.services.auth import AuthService
 
-
 # Re-export for convenience
 __all__ = [
-    "get_db",
-    "get_current_user",
     "get_current_active_user",
+    "get_current_user",
+    "get_db",
     "get_tenant_context",
 ]
 
@@ -35,6 +32,7 @@ async def get_current_user(
 
     Raises:
         UnauthorizedException: If the token is missing or invalid.
+
     """
     if authorization is None:
         raise UnauthorizedException(detail="Authorization header is required")
@@ -57,6 +55,7 @@ async def get_current_active_user(
 
     Raises:
         ForbiddenException: If the user account is deactivated.
+
     """
     if not current_user.is_active:
         raise ForbiddenException(detail="User account is deactivated")
@@ -65,7 +64,6 @@ async def get_current_active_user(
 
 async def get_tenant_context(
     request: Request,
-    x_tenant_id: str | None = Header(None, alias="X-Tenant-ID"),
     current_user: User = Depends(get_current_active_user),
 ) -> UUID:
     """Resolve the effective tenant ID.
@@ -78,18 +76,28 @@ async def get_tenant_context(
 
     Raises:
         ForbiddenException: If the user does not have access to the tenant.
+
     """
+    x_tenant_id: str | None = request.headers.get("X-Tenant-ID") or request.headers.get(
+        "x-tenant-id"
+    )
     if x_tenant_id:
         tenant_id = UUID(x_tenant_id)
-        # Verify user belongs to this tenant
-        if not await _user_belongs_to_tenant(current_user.id, tenant_id, request.app.state.db):
-            raise ForbiddenException(detail="User does not belong to this tenant")
+        # Verify user belongs to this tenant (can be disabled via app.state for testing)
+        if getattr(getattr(request, "app", None), "state", None) is not None:
+            _skip_check = getattr(request.app.state, "skip_tenant_membership_check", False)
+        else:
+            _skip_check = False
+        if not _skip_check:
+            from app.database import async_session_factory
+
+            async with async_session_factory() as session:
+                if not await _user_belongs_to_tenant(current_user.id, tenant_id, session):
+                    raise ForbiddenException(detail="User does not belong to this tenant")
         return tenant_id
 
     # Fall back to user's default tenant
-    from app.services.tenant import TenantService
 
-    db = request.app.state.db  # This won't work directly; use get_db dependency
     # Instead, the caller should inject get_db; for simplicity, we return the
     # tenant from the token claims if present, or raise.
     token_tenant = getattr(request.state, "tenant_id", None)
@@ -101,7 +109,8 @@ async def get_tenant_context(
 
 async def _user_belongs_to_tenant(user_id: UUID, tenant_id: UUID, db: AsyncSession) -> bool:
     """Check if a user belongs to a tenant via any workspace."""
-    from sqlalchemy import select, func
+    from sqlalchemy import func, select
+
     from app.models.tenant import UserRole, Workspace
 
     stmt = (

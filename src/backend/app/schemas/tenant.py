@@ -1,11 +1,9 @@
-"""
-Pydantic schemas for tenant and workspace management.
-"""
+"""Pydantic schemas for tenant and workspace management."""
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -22,10 +20,10 @@ class WorkspaceCreate(BaseModel):
 class WorkspaceUpdate(BaseModel):
     """Payload for PATCH /workspaces/{id}."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=256)
-    slug: Optional[str] = Field(None, min_length=1, max_length=128, pattern=r"^[a-z0-9\-]+$")
-    settings: Optional[dict[str, Any]] = None
-    branding: Optional[dict[str, Any]] = None
+    name: str | None = Field(None, min_length=1, max_length=256)
+    slug: str | None = Field(None, min_length=1, max_length=128, pattern=r"^[a-z0-9\-]+$")
+    settings: dict[str, Any] | None = None
+    branding: dict[str, Any] | None = None
 
 
 class WorkspaceResponse(BaseModel):
@@ -36,8 +34,8 @@ class WorkspaceResponse(BaseModel):
     name: str
     slug: str
     is_default: bool
-    settings: Optional[dict[str, Any]] = None
-    branding: Optional[dict[str, Any]] = None
+    settings: dict[str, Any] | None = None
+    branding: dict[str, Any] | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -51,7 +49,7 @@ class TenantResponse(BaseModel):
     id: UUID
     name: str
     slug: str
-    domain: Optional[str] = None
+    domain: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -73,7 +71,7 @@ class RoleResponse(BaseModel):
     id: UUID
     tenant_id: UUID
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     is_system: bool
     created_at: datetime
 

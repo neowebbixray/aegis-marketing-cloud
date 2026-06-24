@@ -1,11 +1,8 @@
-"""
-GraphQL schema for Aegis Marketing Cloud.
-"""
+"""GraphQL schema for Aegis Marketing Cloud."""
 
 from __future__ import annotations
 
 import strawberry
-from fastapi import APIRouter
 from strawberry.fastapi import GraphQLRouter
 
 

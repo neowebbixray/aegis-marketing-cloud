@@ -70,29 +70,37 @@ const statusConfig: Record<AgentStatus, { label: string; className: string }> = 
 };
 
 const capabilityLabels: Record<AgentCapability, string> = {
-  content_generation: 'Content Gen',
+  'content-generation': 'Content Gen',
   classification: 'Classification',
-  sentiment_analysis: 'Sentiment',
-  lead_scoring: 'Lead Scoring',
+  'sentiment-analysis': 'Sentiment',
+  'lead-scoring': 'Lead Scoring',
   email_composer: 'Email Composer',
   chat: 'Chat',
   summarization: 'Summarization',
   translation: 'Translation',
   image_analysis: 'Image Analysis',
   recommendation: 'Recommendation',
+  'intent-detection': 'Intent Detection',
+  'ab-testing': 'A/B Testing',
+  'segment-analysis': 'Segment Analysis',
+  forecasting: 'Forecasting',
 };
 
 const capabilityColors: Record<AgentCapability, string> = {
-  content_generation: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  'content-generation': 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
   classification: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
-  sentiment_analysis: 'bg-pink-500/10 text-pink-600 dark:text-pink-400',
-  lead_scoring: 'bg-green-500/10 text-green-600 dark:text-green-400',
+  'sentiment-analysis': 'bg-pink-500/10 text-pink-600 dark:text-pink-400',
+  'lead-scoring': 'bg-green-500/10 text-green-600 dark:text-green-400',
   email_composer: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
   chat: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
   summarization: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
   translation: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
   image_analysis: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
   recommendation: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  'intent-detection': 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+  'ab-testing': 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
+  'segment-analysis': 'bg-slate-500/10 text-slate-600 dark:text-slate-400',
+  forecasting: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
 };
 
 const allCapabilities = Object.keys(capabilityLabels) as AgentCapability[];

@@ -1,6 +1,4 @@
-"""
-Tests for the AI endpoints: agents, conversations, content generation, analysis.
-"""
+"""Tests for the AI endpoints: agents, conversations, content generation, analysis."""
 
 from __future__ import annotations
 
@@ -10,7 +8,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories.ai import AIAgentFactory, ConversationFactory, KnowledgeDocumentFactory
+from tests.factories.ai import ConversationFactory
 
 
 @pytest.mark.asyncio
@@ -53,7 +51,7 @@ async def test_create_conversation(
         "title": "Test conversation",
         "user_id": str(test_user.id),
         "tenant_id": str(test_user.tenant_id),
-        "agent_type": "chatbot",
+        "agent_type": "support",
     }
 
     response = await client.post(
@@ -94,9 +92,13 @@ async def test_get_conversation(
     test_user,
 ) -> None:
     """A user can get a specific conversation by ID."""
+    from tests.factories.ai import AIAgentFactory
+
+    agent = AIAgentFactory(tenant_id=test_tenant.id)
     conv = ConversationFactory(
         tenant_id=test_tenant.id,
         user_id=test_user.id,
+        agent_id=agent.id,
     )
     await db_session.flush()
 

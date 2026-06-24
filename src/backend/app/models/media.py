@@ -1,4 +1,5 @@
 """Media models — assets with multi-tenant isolation and metadata."""
+
 from __future__ import annotations
 
 import uuid
@@ -18,7 +19,8 @@ class Asset(BaseModel):
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
     user_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)

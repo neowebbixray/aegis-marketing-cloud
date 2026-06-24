@@ -1,29 +1,25 @@
-"""
-Tenant and workspace management service.
-"""
+"""Tenant and workspace management service."""
 
 from __future__ import annotations
 
 import logging
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional, Union
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictException, NotFoundException
+from app.models.auth import User
 from app.models.tenant import (
     PendingInvitation,
-    Permission,
     Role,
-    RolePermission,
     Tenant,
     UserRole,
     Workspace,
 )
-from app.models.auth import User
 
 logger = logging.getLogger("amc.services.tenant")
 
@@ -36,7 +32,10 @@ class TenantService:
 
     # ── Tenant ───────────────────────────────────────────────────────────────
     async def create_tenant(
-        self, name: str, slug: str, domain: str | None = None
+        self,
+        name: str,
+        slug: str,
+        domain: str | None = None,
     ) -> Tenant:
         """Create a new tenant organisation."""
         existing = await self.db.execute(select(Tenant).where(Tenant.slug == slug))
@@ -88,11 +87,11 @@ class TenantService:
                 Workspace.tenant_id == tenant_id,
                 Workspace.slug == slug,
                 Workspace.deleted_at.is_(None),
-            )
+            ),
         )
         if existing.scalars().first():
             raise ConflictException(
-                detail=f"Workspace with slug '{slug}' already exists in this tenant"
+                detail=f"Workspace with slug '{slug}' already exists in this tenant",
             )
 
         workspace = Workspace(
@@ -114,7 +113,7 @@ class TenantService:
             select(Workspace).where(
                 Workspace.tenant_id == tenant_id,
                 Workspace.deleted_at.is_(None),
-            )
+            ),
         )
         return list(result.scalars().all())
 
@@ -124,7 +123,7 @@ class TenantService:
             select(Workspace).where(
                 Workspace.id == workspace_id,
                 Workspace.deleted_at.is_(None),
-            )
+            ),
         )
         workspace = result.scalars().first()
         if workspace is None:
@@ -148,7 +147,11 @@ class TenantService:
 
     # ── Membership & Invitations ─────────────────────────────────────────────
     async def invite_user(
-        self, workspace_id: UUID, email: str, role_id: UUID, invited_by_user_id: UUID
+        self,
+        workspace_id: UUID,
+        email: str,
+        role_id: UUID,
+        invited_by_user_id: UUID,
     ) -> UserRole | PendingInvitation:
         """Assign a role to a user within a workspace.
 
@@ -159,7 +162,7 @@ class TenantService:
 
         # Verify role belongs to the same tenant
         role_result = await self.db.execute(
-            select(Role).where(Role.id == role_id, Role.tenant_id == workspace.tenant_id)
+            select(Role).where(Role.id == role_id, Role.tenant_id == workspace.tenant_id),
         )
         role = role_result.scalars().first()
         if role is None:
@@ -171,7 +174,7 @@ class TenantService:
         if user is None:
             # Create a pending invitation record
             token = secrets.token_urlsafe(48)
-            expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+            expires_at = datetime.now(UTC) + timedelta(days=7)
 
             invitation = PendingInvitation(
                 tenant_id=workspace.tenant_id,
@@ -189,7 +192,10 @@ class TenantService:
 
             logger.info(
                 "Invitation sent to %s for workspace %s with role %s (token=%s)",
-                email, workspace_id, role_id, token,
+                email,
+                workspace_id,
+                role_id,
+                token,
             )
             # Simulate email dispatch (integrate with EmailService in production)
             return invitation
@@ -200,7 +206,7 @@ class TenantService:
                 UserRole.user_id == user.id,
                 UserRole.role_id == role_id,
                 UserRole.workspace_id == workspace_id,
-            )
+            ),
         )
         if existing.scalars().first():
             raise ConflictException(detail="User already has this role in the workspace")
@@ -223,7 +229,7 @@ class TenantService:
             select(UserRole).where(
                 UserRole.workspace_id == workspace_id,
                 UserRole.user_id == user_id,
-            )
+            ),
         )
         user_role = result.scalars().first()
         if user_role is None:
@@ -238,12 +244,15 @@ class TenantService:
     async def get_roles(self, tenant_id: UUID) -> list[Role]:
         """List all roles for a tenant."""
         result = await self.db.execute(
-            select(Role).where(Role.tenant_id == tenant_id)
+            select(Role).where(Role.tenant_id == tenant_id),
         )
         return list(result.scalars().all())
 
     async def assign_role(
-        self, user_id: UUID, role_id: UUID, workspace_id: UUID
+        self,
+        user_id: UUID,
+        role_id: UUID,
+        workspace_id: UUID,
     ) -> UserRole:
         """Assign a role to a user in a workspace."""
         user_role = UserRole(

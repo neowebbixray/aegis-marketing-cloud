@@ -1,17 +1,15 @@
-"""
-Factory classes for webhook models:
+"""Factory classes for webhook models:
 Webhook, WebhookDelivery.
 """
 
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import factory
-from factory.alchemy import SQLAlchemyModelFactory
-
 from app.models.webhooks import Webhook, WebhookDelivery
+from factory.alchemy import SQLAlchemyModelFactory
 
 
 class BaseFactory(SQLAlchemyModelFactory):
@@ -34,11 +32,13 @@ class WebhookFactory(BaseFactory):
     events = factory.List(["contact.created", "deal.updated", "campaign.completed"])
     is_active = True
     api_version = "v1"
-    retry_config = factory.Dict({
-        "max_retries": 3,
-        "initial_delay_ms": 1000,
-        "backoff_factor": 2.0,
-    })
+    retry_config = factory.Dict(
+        {
+            "max_retries": 3,
+            "initial_delay_ms": 1000,
+            "backoff_factor": 2.0,
+        }
+    )
     description = factory.Faker("sentence", nb_words=6)
 
 
@@ -49,15 +49,22 @@ class WebhookDeliveryFactory(BaseFactory):
         model = WebhookDelivery
 
     webhook_id = factory.LazyFunction(uuid.uuid4)
-    event_type = factory.Iterator([
-        "contact.created", "deal.updated", "campaign.completed",
-        "webhook.test", "email.sent",
-    ])
+    event_type = factory.Iterator(
+        [
+            "contact.created",
+            "deal.updated",
+            "campaign.completed",
+            "webhook.test",
+            "email.sent",
+        ]
+    )
     status = factory.Iterator(["succeeded", "failed", "retrying", "pending"])
-    request_headers = factory.Dict({
-        "Content-Type": "application/json",
-        "X-Signature": "sha256=test_signature",
-    })
+    request_headers = factory.Dict(
+        {
+            "Content-Type": "application/json",
+            "X-Signature": "sha256=test_signature",
+        }
+    )
     request_body = factory.Faker("paragraph", nb_sentences=3)
     response_status = factory.Iterator([200, 201, 400, 500, None])
     response_body = factory.Faker("sentence", nb_words=8)
@@ -66,5 +73,5 @@ class WebhookDeliveryFactory(BaseFactory):
     max_attempts = 5
     next_retry_at = None
     completed_at = factory.LazyFunction(
-        lambda: datetime.now(timezone.utc) - timedelta(minutes=5)
+        lambda: datetime.now(UTC) - timedelta(minutes=5),
     )

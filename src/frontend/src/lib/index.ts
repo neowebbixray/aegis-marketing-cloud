@@ -1,4 +1,4 @@
-export { apiClient, authApi, workspaceApi, contactsApi, dealsApi, pipelinesApi, ApiError } from './api';
+export { apiClient, authApi, workspaceApi, contactsApi, dealsApi, pipelinesApi, activitiesApi, ApiError } from './api';
 export {
   billingApi,
   mediaApi,
@@ -6,7 +6,7 @@ export {
   analyticsApi,
   aiApi,
   knowledgeApi,
-} from './api';
+} from './api/index';
 export type {
   SubscriptionPlan,
   Subscription,
@@ -23,6 +23,6 @@ export type {
   GenerationResult,
   KnowledgeDocument,
   SearchResult,
-} from './api';
-export { useAuth, getAccessToken, isAuthenticated, clearTokens } from './auth';
+} from './api/index';
+export { useAuth, isAuthenticated } from './auth';
 export { cn, formatDate, formatDateTime, formatCurrency, debounce, capitalize, truncate, getInitials, generateColorFromString } from './utils';

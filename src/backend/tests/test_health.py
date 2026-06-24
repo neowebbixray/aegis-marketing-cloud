@@ -1,6 +1,4 @@
-"""
-Tests for health check endpoints: liveness, readiness, and full health report.
-"""
+"""Tests for health check endpoints: liveness, readiness, and full health report."""
 
 from __future__ import annotations
 

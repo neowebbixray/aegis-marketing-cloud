@@ -1,6 +1,4 @@
-"""
-Base service with common CRUD operations for all entity services.
-"""
+"""Base service with common CRUD operations for all entity services."""
 
 from __future__ import annotations
 
@@ -39,7 +37,9 @@ class BaseService(Generic[ModelT]):
     # ── Query helpers ────────────────────────────────────────────────────────
 
     def _apply_tenant_filter(
-        self, stmt: Select, tenant_id: UUID | None = None
+        self,
+        stmt: Select,
+        tenant_id: UUID | None = None,
     ) -> Select:
         """Apply tenant-scoped filtering if the model has a ``tenant_id`` column.
 
@@ -58,7 +58,10 @@ class BaseService(Generic[ModelT]):
     # ── CRUD ─────────────────────────────────────────────────────────────────
 
     async def get(
-        self, id: UUID, tenant_id: UUID | None = None, include_deleted: bool = False
+        self,
+        id: UUID,
+        tenant_id: UUID | None = None,
+        include_deleted: bool = False,
     ) -> ModelT:
         """Fetch a single record by primary key.
 
@@ -86,6 +89,7 @@ class BaseService(Generic[ModelT]):
 
         Returns:
             Tuple of ``(items, total_count)``.
+
         """
         # Count query
         count_stmt = select(func.count()).select_from(self.model)
@@ -121,7 +125,10 @@ class BaseService(Generic[ModelT]):
         return obj
 
     async def update(
-        self, id: UUID, tenant_id: UUID | None = None, **kwargs: Any
+        self,
+        id: UUID,
+        tenant_id: UUID | None = None,
+        **kwargs: Any,
     ) -> ModelT:
         """Update a record in-place. Raises ``NotFoundException`` if not found."""
         obj = await self.get(id, tenant_id=tenant_id)

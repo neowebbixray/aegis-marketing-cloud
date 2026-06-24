@@ -1,5 +1,4 @@
-"""
-CRM service classes: ContactService, DealService, PipelineService,
+"""CRM service classes: ContactService, DealService, PipelineService,
 ActivityService, and CustomFieldDefinitionService.
 
 All tenant-scoped operations require a ``tenant_id`` UUID.
@@ -12,7 +11,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, desc, func, select, or_
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -91,6 +90,7 @@ class ContactService(BaseService[Contact]):
 
         Returns:
             The updated Contact.
+
         """
         contact = await self.get(contact_id, tenant_id=tenant_id)
         contact.score = score
@@ -172,9 +172,7 @@ class ContactService(BaseService[Contact]):
             if workspace_id:
                 fallback_conditions.append(Contact.workspace_id == workspace_id)
 
-            count_stmt = (
-                select(func.count()).select_from(Contact).where(*fallback_conditions)
-            )
+            count_stmt = select(func.count()).select_from(Contact).where(*fallback_conditions)
             total_result = await self.db.execute(count_stmt)
             total = total_result.scalar() or 0
 
@@ -244,7 +242,7 @@ class DealService(BaseService[Deal]):
 
         # Verify the new stage exists
         stage_result = await self.db.execute(
-            select(PipelineStage).where(PipelineStage.id == new_stage_id)
+            select(PipelineStage).where(PipelineStage.id == new_stage_id),
         )
         new_stage = stage_result.scalars().first()
         if new_stage is None:
@@ -253,12 +251,12 @@ class DealService(BaseService[Deal]):
         # Verify the stage belongs to the same pipeline
         if deal.pipeline_stage_id:
             old_stage_result = await self.db.execute(
-                select(PipelineStage).where(PipelineStage.id == deal.pipeline_stage_id)
+                select(PipelineStage).where(PipelineStage.id == deal.pipeline_stage_id),
             )
             old_stage = old_stage_result.scalars().first()
             if old_stage and old_stage.pipeline_id != new_stage.pipeline_id:
                 raise ValidationException(
-                    detail="Cannot move deal to a stage in a different pipeline"
+                    detail="Cannot move deal to a stage in a different pipeline",
                 )
 
         old_stage_id = deal.pipeline_stage_id
@@ -402,6 +400,7 @@ class PipelineService:
 
         Returns:
             The created Pipeline with stages eagerly loaded.
+
         """
         # If this is the default pipeline, unset any existing default
         if is_default:
@@ -411,7 +410,7 @@ class PipelineService:
                     Pipeline.workspace_id == workspace_id,
                     Pipeline.is_default.is_(True),
                     Pipeline.deleted_at.is_(None),
-                )
+                ),
             )
             old_default = existing_default.scalar_one_or_none()
             if old_default:

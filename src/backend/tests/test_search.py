@@ -1,6 +1,4 @@
-"""
-Tests for the search endpoints: global search, contacts, deals, campaigns.
-"""
+"""Tests for the search endpoints: global search, contacts, deals, campaigns."""
 
 from __future__ import annotations
 

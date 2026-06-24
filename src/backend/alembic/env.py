@@ -1,5 +1,4 @@
-"""
-Alembic environment configuration for Aegis Marketing Cloud.
+"""Alembic environment configuration for Aegis Marketing Cloud.
 
 Loads the async SQLAlchemy engine from ``app.database`` and configures
 Alembic to auto-detect model changes via ``app.models``.
@@ -23,8 +22,8 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Import the declarative Base so Alembic can detect models
-from app.database import Base  # noqa: E402
 from app import models  # noqa: F401, E402 — force model registration
+from app.database import Base  # noqa: E402
 
 target_metadata = Base.metadata
 
@@ -44,8 +43,8 @@ def get_database_url() -> str:
             return url
         raise RuntimeError(
             "DATABASE_URL must be set in the environment or config. "
-            "Example: DATABASE_URL=postgresql+asyncpg://amc:secret@localhost:5432/aegis_marketing_cloud"
-        )
+            "Example: DATABASE_URL=postgresql+asyncpg://amc:secret@localhost:5432/aegis_marketing_cloud",
+        ) from None
 
 
 def run_migrations_offline() -> None:

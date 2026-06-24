@@ -1,5 +1,4 @@
-"""
-Media service: file upload/download via MinIO (with local filesystem fallback),
+"""Media service: file upload/download via MinIO (with local filesystem fallback),
 asset CRUD, thumbnail generation, and streaming responses.
 """
 
@@ -12,7 +11,7 @@ import mimetypes
 import os
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import or_
@@ -20,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.exceptions import NotFoundException, ValidationException
-from app.core.file_validator import FileCategory, validate_file
+from app.core.file_validator import validate_file
 from app.models.media import Asset
 from app.services.base import BaseService
 
@@ -60,10 +59,16 @@ def _get_minio_client():
     if _minio_client is not None:
         return _minio_client
 
-    endpoint = os.getenv("MINIO_ENDPOINT", "localhost:9000")
-    access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
-    secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
-    use_ssl = os.getenv("MINIO_USE_SSL", "false").lower() == "true"
+    endpoint_raw = settings.minio_endpoint
+    if not endpoint_raw or endpoint_raw == "localhost:9000":
+        # Not configured — skip MinIO entirely
+        _minio_available = False
+        return None
+
+    endpoint = str(endpoint_raw)
+    access_key = settings.minio_access_key or "minioadmin"
+    secret_key = settings.minio_secret_key or "minioadmin"
+    use_ssl = settings.minio_use_ssl
 
     try:
         from minio import Minio
@@ -157,6 +162,7 @@ class MediaService(BaseService[Asset]):
         -------
         Asset
             The newly created Asset record.
+
         """
         # Read file content
         content = await file.read()
@@ -242,7 +248,9 @@ class MediaService(BaseService[Asset]):
         return asset
 
     async def _get_image_dimensions(
-        self, content: bytes, mime_type: str
+        self,
+        content: bytes,
+        mime_type: str,
     ) -> tuple[int | None, int | None]:
         """Return ``(width, height)`` for image content, or ``(None, None)``."""
         if mime_type not in IMAGE_MIME_TYPES:
@@ -313,7 +321,7 @@ class MediaService(BaseService[Asset]):
                     Asset.original_filename.ilike(pattern),
                     Asset.filename.ilike(pattern),
                     Asset.alt_text.ilike(pattern),
-                )
+                ),
             )
 
         skip = (page - 1) * per_page
@@ -389,18 +397,17 @@ class MediaService(BaseService[Asset]):
         Returns
         -------
         Tuple of ``(image_bytes, mime_type)``.
+
         """
         asset = await self.get(asset_id, tenant_id=tenant_id)
 
         if asset.mime_type not in IMAGE_MIME_TYPES:
             raise ValidationException(
-                detail=f"Thumbnails are not supported for {asset.mime_type} assets"
+                detail=f"Thumbnails are not supported for {asset.mime_type} assets",
             )
 
         # Cached thumbnail path
-        thumb_filename = (
-            f"{asset.id}_{width}x{height}_{asset.checksum or 'nocache'}.webp"
-        )
+        thumb_filename = f"{asset.id}_{width}x{height}_{asset.checksum or 'nocache'}.webp"
         thumb_dir = THUMBNAIL_DIR / str(tenant_id)
         thumb_dir.mkdir(parents=True, exist_ok=True)
         thumb_path = thumb_dir / thumb_filename
@@ -418,10 +425,7 @@ class MediaService(BaseService[Asset]):
             img.thumbnail((width, height), Image.LANCZOS)
 
             # Convert to RGB if necessary (WebP does not support RGBA with all decoders)
-            if img.mode in ("RGBA", "LA", "P"):
-                img = img.convert("RGBA")
-            else:
-                img = img.convert("RGB")
+            img = img.convert("RGBA") if img.mode in ("RGBA", "LA", "P") else img.convert("RGB")
 
             buf = io.BytesIO()
             img.save(buf, format="WEBP", quality=80, optimize=True)

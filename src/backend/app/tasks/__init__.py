@@ -1,4 +1,5 @@
 """Celery async task queue configuration."""
+
 from __future__ import annotations
 
 from celery import Celery
@@ -38,5 +39,4 @@ celery_app.conf.update(
 @celery_app.task(bind=True, max_retries=3)
 def debug_task(self) -> str:
     """Debug task to verify Celery is running."""
-    print(f"Request: {self.request!r}")
     return f"Celery worker OK — {settings.app_name}"

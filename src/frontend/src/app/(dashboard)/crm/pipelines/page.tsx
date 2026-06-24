@@ -50,7 +50,7 @@ function StageBadge({ stage }: { stage: PipelineStage }) {
     <div className="flex items-center justify-between p-3 rounded-lg border bg-card">
       <div className="flex items-center gap-3">
         <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
-        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: stage.color }} />
+        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: stage.colour ?? undefined }} />
         <div>
           <p className="text-sm font-medium">{stage.name}</p>
           <p className="text-xs text-muted-foreground">
@@ -133,7 +133,7 @@ function CreatePipelineDialog({
   const [name, setName] = useState(editPipeline?.name ?? '');
   const [description, setDescription] = useState(editPipeline?.description ?? '');
   const [stages, setStages] = useState<{ name: string; color: string; probability: number }[]>(
-    editPipeline?.stages.map((s) => ({ name: s.name, color: s.color, probability: s.probability })) ?? [
+    editPipeline?.stages.map((s) => ({ name: s.name, color: s.colour ?? '#6B7280', probability: s.probability ?? 0 })) ?? [
       { name: 'Lead In', color: '#6B7280', probability: 10 },
       { name: 'Qualified', color: '#3B82F6', probability: 30 },
       { name: 'Proposal', color: '#F59E0B', probability: 60 },
@@ -149,11 +149,16 @@ function CreatePipelineDialog({
     }
 
     try {
+      const payload = {
+        name,
+        description,
+        stages: stages.map((s) => ({ name: s.name, colour: s.color, probability: s.probability })),
+      };
       if (editPipeline) {
-        await updatePipeline.mutateAsync({ name, description, stages });
+        await updatePipeline.mutateAsync(payload);
         toast.success('Pipeline updated');
       } else {
-        await createPipeline.mutateAsync({ name, description, stages });
+        await createPipeline.mutateAsync(payload);
         toast.success('Pipeline created');
       }
       onOpenChange(false);

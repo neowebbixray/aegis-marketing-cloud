@@ -110,4 +110,4 @@ export type {
   Pipeline,
   CreatePipelineRequest,
   Activity,
-} from './api';
+} from '@/types';

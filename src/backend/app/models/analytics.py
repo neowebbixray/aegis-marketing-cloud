@@ -2,6 +2,7 @@
 
 All models are multi-tenant (tenant_id scoped).
 """
+
 from __future__ import annotations
 
 import uuid
@@ -33,7 +34,9 @@ class AnalyticsEvent(BaseModel):
     entity_type: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     entity_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
     timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, index=True
+        DateTime(timezone=True),
+        nullable=False,
+        index=True,
     )
     processed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
@@ -56,7 +59,9 @@ class MetricSnapshot(BaseModel):
     value: Mapped[float] = mapped_column(Float, nullable=False)
     dimensions: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True, default=dict)
     timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, index=True
+        DateTime(timezone=True),
+        nullable=False,
+        index=True,
     )
 
     def __repr__(self) -> str:
@@ -98,7 +103,8 @@ class ScheduledReport(BaseModel):
     schedule: Mapped[str | None] = mapped_column(String(100), nullable=True)  # cron expression
     recipients: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True, default=list)
     last_generated: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     def __repr__(self) -> str:

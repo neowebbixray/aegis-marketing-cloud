@@ -421,7 +421,7 @@ export default function DashboardDetailPage() {
               <SelectItem value="custom">Custom Range</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={granularity} onValueChange={setGranularity}>
+          <Select value={granularity} onValueChange={(value) => setGranularity(value as AnalyticsGranularity)}>
             <SelectTrigger className="w-[110px]">
               <SelectValue />
             </SelectTrigger>

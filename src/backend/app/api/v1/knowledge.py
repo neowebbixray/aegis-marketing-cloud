@@ -1,5 +1,4 @@
-"""
-Knowledge Base router: document management with Qdrant vector indexing
+"""Knowledge Base router: document management with Qdrant vector indexing
 and semantic search.
 
 All list responses use the ``{data, meta, links}`` envelope.
@@ -130,7 +129,7 @@ async def upload_document(
             document=_doc_to_response(doc),
             chunks_indexed=result["chunks_indexed"],
             message="Document uploaded and indexed successfully",
-        )
+        ),
     )
 
 
@@ -153,7 +152,6 @@ async def list_documents(
     service = KnowledgeService(db)
     skip = (page - 1) * limit
 
-    from sqlalchemy import or_
     from sqlalchemy.sql import ColumnElement
 
     filters: list[ColumnElement] = []
@@ -165,9 +163,8 @@ async def list_documents(
         tag_list = [t.strip() for t in tags.split(",") if t.strip()]
         if tag_list:
             # Match documents whose tags array contains any of the given tags
-            from sqlalchemy.dialects.postgresql import ARRAY
             filters.append(
-                KnowledgeDocument.tags.overlap(tag_list)  # type: ignore[attr-defined]
+                KnowledgeDocument.tags.overlap(tag_list),  # type: ignore[attr-defined]
             )
 
     items, total = await service.list(
@@ -218,7 +215,7 @@ async def update_document(
     service = KnowledgeService(db)
 
     updates = body.model_dump(exclude_unset=True)
-    result = await service.update_document(tenant_id, document_id, **updates)
+    await service.update_document(tenant_id, document_id, **updates)
 
     # Fetch the updated document
     doc = await service.get(document_id, tenant_id=tenant_id)
@@ -236,7 +233,6 @@ async def delete_document(
     tenant_id = await get_tenant_context(request, current_user=current_user)
     service = KnowledgeService(db)
     await service.delete_document(tenant_id, document_id)
-    return None
 
 
 @router.post("/documents/{document_id}/index")
@@ -305,7 +301,7 @@ async def search_documents(
             results=search_results,
             total=len(search_results),
             query=body.query,
-        )
+        ),
     )
 
 
@@ -343,9 +339,7 @@ async def reindex_all(
     indexed = sum(1 for r in results if r.get("is_indexed", False))
     failed = sum(1 for r in results if not r.get("is_indexed", False))
     errors = [
-        r.get("error", "")
-        for r in results
-        if not r.get("is_indexed", False) and r.get("error")
+        r.get("error", "") for r in results if not r.get("is_indexed", False) and r.get("error")
     ]
 
     return build_single_response(
@@ -357,5 +351,5 @@ async def reindex_all(
             message="Re-index complete"
             if not errors
             else f"Re-index finished with {failed} failure(s)",
-        )
+        ),
     )

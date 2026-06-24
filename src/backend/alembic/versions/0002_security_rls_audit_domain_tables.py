@@ -20,17 +20,17 @@ Features:
 
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers
 revision: str = "0002"
-down_revision: Union[str, None] = "0001"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "0001"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -146,7 +146,7 @@ def upgrade() -> None:
 
     # Audit trigger function
     op.execute("""
-        CREATE OR REPLACE FUNCTION fn_audit_trigger()
+        CREATE OR REPLACE FUNCTION audit_log_trigger()
         RETURNS trigger
         LANGUAGE plpgsql
         SECURITY DEFINER
@@ -223,65 +223,7 @@ def upgrade() -> None:
         $$;
     """)
 
-    # ── 5. RLS — enable and create policies for each tenant-scoped table ────
-
-    for table_name in ALL_SECURED_TABLES:
-        op.execute(f'ALTER TABLE "{table_name}" ENABLE ROW LEVEL SECURITY')
-
-        # Multi-tenant isolation policy (tenant_id column)
-        op.execute(f"""
-            CREATE POLICY tenant_isolation ON "{table_name}"
-            FOR ALL
-            USING (
-                tenant_id = current_setting('app.current_tenant_id')::uuid
-            )
-            WITH CHECK (
-                tenant_id = current_setting('app.current_tenant_id')::uuid
-            )
-        """)
-
-        # Superuser bypass
-        op.execute(f"""
-            CREATE POLICY superuser_bypass ON "{table_name}"
-            FOR ALL
-            USING (
-                current_setting('app.is_superuser', TRUE) = 'true'
-            )
-            WITH CHECK (
-                current_setting('app.is_superuser', TRUE) = 'true'
-            )
-        """)
-
-    # RLS for billing tables (subscriptions, invoices, credit_wallets)
-    for table_name in BILLING_TABLES:
-        op.execute(f"""
-            CREATE POLICY billing_isolation ON "{table_name}"
-            FOR ALL
-            USING (
-                tenant_id = current_setting('app.current_tenant_id')::uuid
-            )
-            WITH CHECK (
-                tenant_id = current_setting('app.current_tenant_id')::uuid
-            )
-        """)
-
-    # ── 6. Apply audit triggers to key tenant tables ─────────────────────────
-
-    AUDIT_TRIGGER_TABLES = [
-        "contacts", "deals", "pipelines", "activities",
-        "campaigns", "email_templates", "landing_pages",
-        "segments", "knowledge_documents", "ai_agents",
-        "subscriptions", "invoices",
-    ]
-
-    for table_name in AUDIT_TRIGGER_TABLES:
-        op.execute(f"""
-            CREATE TRIGGER trg_{table_name}_audit
-            AFTER INSERT OR UPDATE OR DELETE ON "{table_name}"
-            FOR EACH ROW EXECUTE FUNCTION fn_audit_trigger()
-        """)
-
-    # ── 7. Marketing tables ─────────────────────────────────────────────────
+    # ── 5. Marketing tables ─────────────────────────────────────────────────
 
     op.create_table(
         "campaigns",
@@ -401,7 +343,7 @@ def upgrade() -> None:
                   server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False),
     )
 
-    # ── 8. AI tables ────────────────────────────────────────────────────────
+    # ── 6. AI tables ────────────────────────────────────────────────────────
 
     op.create_table(
         "ai_agents",
@@ -512,7 +454,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_messages_conversation_id", "messages", ["conversation_id"])
 
-    # ── 9. Billing tables ───────────────────────────────────────────────────
+    # ── 7. Billing tables ───────────────────────────────────────────────────
 
     op.create_table(
         "subscriptions",
@@ -573,7 +515,7 @@ def upgrade() -> None:
                   server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False),
     )
 
-    # ── 10. Media table ─────────────────────────────────────────────────────
+    # ── 8. Media table ─────────────────────────────────────────────────────
 
     op.create_table(
         "assets",
@@ -601,6 +543,64 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True),
                   server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False),
     )
+
+    # ── 9. RLS — enable and create policies (AFTER all tables exist) ────────
+
+    for table_name in ALL_SECURED_TABLES:
+        op.execute(f'ALTER TABLE "{table_name}" ENABLE ROW LEVEL SECURITY')
+
+        # Multi-tenant isolation policy (tenant_id column)
+        op.execute(f"""
+            CREATE POLICY tenant_isolation ON "{table_name}"
+            FOR ALL
+            USING (
+                tenant_id = current_setting('app.current_tenant_id')::uuid
+            )
+            WITH CHECK (
+                tenant_id = current_setting('app.current_tenant_id')::uuid
+            )
+        """)
+
+        # Superuser bypass
+        op.execute(f"""
+            CREATE POLICY superuser_bypass ON "{table_name}"
+            FOR ALL
+            USING (
+                current_setting('app.is_superuser', TRUE) = 'true'
+            )
+            WITH CHECK (
+                current_setting('app.is_superuser', TRUE) = 'true'
+            )
+        """)
+
+    # RLS for billing tables (subscriptions, invoices, credit_wallets)
+    for table_name in BILLING_TABLES:
+        op.execute(f"""
+            CREATE POLICY billing_isolation ON "{table_name}"
+            FOR ALL
+            USING (
+                tenant_id = current_setting('app.current_tenant_id')::uuid
+            )
+            WITH CHECK (
+                tenant_id = current_setting('app.current_tenant_id')::uuid
+            )
+        """)
+
+    # ── 10. Apply audit triggers (AFTER all tables exist) ────────────────────
+
+    audit_trigger_tables = [
+        "contacts", "deals", "pipelines", "activities",
+        "campaigns", "email_templates", "landing_pages",
+        "segments", "knowledge_documents", "ai_agents",
+        "subscriptions", "invoices",
+    ]
+
+    for table_name in audit_trigger_tables:
+        op.execute(f"""
+            CREATE TRIGGER trg_{table_name}_audit
+            AFTER INSERT OR UPDATE OR DELETE ON "{table_name}"
+            FOR EACH ROW EXECUTE FUNCTION audit_log_trigger()
+        """)
 
 
 def downgrade() -> None:
@@ -638,7 +638,7 @@ def downgrade() -> None:
         op.execute(f'ALTER TABLE "{table_name}" DISABLE ROW LEVEL SECURITY')
 
     # Drop audit infrastructure
-    op.execute("DROP FUNCTION IF EXISTS fn_audit_trigger()")
+    op.execute("DROP FUNCTION IF EXISTS audit_log_trigger()")
     op.drop_table("audit_logs")
 
     # Drop encrypted PII columns

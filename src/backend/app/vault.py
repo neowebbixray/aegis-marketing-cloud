@@ -1,5 +1,4 @@
-"""
-Vault integration helper for Aegis Marketing Cloud.
+"""Vault integration helper for Aegis Marketing Cloud.
 
 If the environment variable ``VAULT_ADDR`` is defined, this module will connect to
 HashiCorp Vault (dev mode, token = ``root``) and pull any secrets stored under
@@ -14,14 +13,14 @@ environment.
 
 from __future__ import annotations
 
-import os
 import logging
-from typing import Any, Dict
+import os
+from typing import Any
 
 logger = logging.getLogger("amc.vault")
 
 
-def _fetch_secrets() -> Dict[str, Any] | None:
+def _fetch_secrets() -> dict[str, Any] | None:
     """Connect to Vault and return the secret dict.
 
     Returns ``None`` on any error (network, auth, path not found). The caller can

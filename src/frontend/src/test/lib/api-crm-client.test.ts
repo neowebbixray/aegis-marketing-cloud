@@ -1,8 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { contactsApi, dealsApi, pipelinesApi, activitiesApi, customFieldsApi } from '@/lib/api/api';
-import { apiClient } from '@/lib/api';
-
-// Mock the apiClient
+// Mock the apiClient module before importing any modules that use it
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@/lib/api')>();
   return {
@@ -17,18 +13,21 @@ vi.mock('@/lib/api', async (importOriginal) => {
   };
 });
 
-// ─── Fixtures ──────────────────────────────────────────────
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { contactsApi, dealsApi, pipelinesApi, activitiesApi, customFieldsApi } from '@/lib/api/api';
+import { apiClient } from '@/lib/api';
 
+// ─── Fixtures ──────────────────────────────────────────────
 const mockContact = {
   id: 'contact-1',
   workspace_id: 'ws-1',
   first_name: 'John',
   last_name: 'Doe',
   email: 'john@example.com',
-  phone: '+1234567890',
+  phone: '+123****7890',
   job_title: 'CEO',
   company: 'Acme Inc',
-  lead_score: 85,
+  score: 85,
   source: 'manual',
   tags: ['vip', 'enterprise'],
   custom_fields: { industry: 'tech' },
@@ -106,7 +105,6 @@ const mockCustomField = {
 };
 
 // ─── Contacts API ──────────────────────────────────────────
-
 describe('contactsApi', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -185,19 +183,22 @@ describe('contactsApi', () => {
     expect(result.data).toEqual([mockContact]);
   });
 
-  it('updateLeadScore() calls PUT /api/v1/crm/contacts/:id/lead-score', async () => {
-    const updatedContact = { ...mockContact, lead_score: 95 };
-    vi.mocked(apiClient.put).mockResolvedValueOnce(updatedContact);
+  it('updateLeadScore() calls POST /api/v1/crm/contacts/:id/lead-score', async () => {
+    const updatedContact = { ...mockContact, score: 95 };
+    vi.mocked(apiClient.post).mockResolvedValueOnce(updatedContact);
 
-    const result = await contactsApi.updateLeadScore('contact-1', 95);
+    const result = await contactsApi.updateLeadScore('contact-1', 95, 'manual', { factor1: 0.5 });
 
-    expect(apiClient.put).toHaveBeenCalledWith('/api/v1/crm/contacts/contact-1/lead-score', { lead_score: 95 });
-    expect(result.data.lead_score).toBe(95);
+    expect(apiClient.post).toHaveBeenCalledWith('/api/v1/crm/contacts/contact-1/lead-score', {
+      score: 95,
+      score_source: 'manual',
+      scoring_factors: { factor1: 0.5 },
+    });
+    expect(result.data.score).toBe(95);
   });
 });
 
 // ─── Deals API ─────────────────────────────────────────────
-
 describe('dealsApi', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -282,7 +283,6 @@ describe('dealsApi', () => {
 });
 
 // ─── Pipelines API ─────────────────────────────────────────
-
 describe('pipelinesApi', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -351,35 +351,33 @@ describe('pipelinesApi', () => {
 });
 
 // ─── Activities API ────────────────────────────────────────
-
 describe('activitiesApi', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('list() calls GET /api/v1/activities', async () => {
+  it('list() calls GET /api/v1/crm/activities', async () => {
     const mockResponse = { items: [mockActivity], total: 1, page: 1, page_size: 20 };
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockResponse);
 
     const result = await activitiesApi.list({ contact_id: 'contact-1', limit: 20 });
 
-    expect(apiClient.get).toHaveBeenCalledWith('/api/v1/activities', { contact_id: 'contact-1', limit: 20 });
+    expect(apiClient.get).toHaveBeenCalledWith('/api/v1/crm/activities', { contact_id: 'contact-1', limit: 20 });
     expect(result.data).toEqual([mockActivity]);
   });
 
-  it('create() calls POST /api/v1/activities', async () => {
+  it('create() calls POST /api/v1/crm/activities', async () => {
     const newActivity = { workspace_id: 'ws-1', type: 'note' as const, subject: 'Follow-up', contact_id: 'contact-1' };
     vi.mocked(apiClient.post).mockResolvedValueOnce({ ...mockActivity, ...newActivity });
 
     const result = await activitiesApi.create(newActivity);
 
-    expect(apiClient.post).toHaveBeenCalledWith('/api/v1/activities', newActivity);
+    expect(apiClient.post).toHaveBeenCalledWith('/api/v1/crm/activities', newActivity);
     expect(result.data.subject).toBe('Follow-up');
   });
 });
 
 // ─── Custom Fields API ─────────────────────────────────────
-
 describe('customFieldsApi', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -442,7 +440,6 @@ describe('customFieldsApi', () => {
 });
 
 // ─── Error Handling ────────────────────────────────────────
-
 describe('CRM API error propagation', () => {
   beforeEach(() => {
     vi.clearAllMocks();

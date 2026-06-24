@@ -8,7 +8,7 @@ export interface ApiResponse<T> {
     total: number;
     has_more: boolean;
   };
-  links: { self: string };
+  links?: { self: string | null };
 }
 
 export interface PaginatedResponse<T> extends ApiResponse<T[]> {}
@@ -19,7 +19,10 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  display_name?: string;
   avatar_url?: string | null;
+  roles?: string[];
+  is_active?: boolean;
 }
 
 export interface DealStage {
@@ -31,20 +34,26 @@ export interface DealStage {
   colour?: string | null;
 }
 
+export type PipelineStage = DealStage;
+
 export interface Contact {
   id: string;
-  workspace_id: string;
+  tenant_id: string;
+  workspace_id?: string;
   first_name: string;
   last_name: string;
   email?: string | null;
   phone?: string | null;
   company?: string | null;
   position?: string | null;
+  avatar_url?: string | null;
   lifecycle_stage: string;
   source?: string | null;
   custom_fields: Record<string, unknown>;
   tags: string[];
   owner_id?: string | null;
+  owner?: User | null;
+  notes?: string;
   score?: number | null;
   score_updated_at?: string | null;
   created_at: string;
@@ -52,7 +61,7 @@ export interface Contact {
 }
 
 export interface CreateContactRequest {
-  workspace_id: string;
+  workspace_id?: string;
   first_name: string;
   last_name: string;
   email?: string;
@@ -82,7 +91,7 @@ export interface UpdateContactRequest {
 
 export interface Deal {
   id: string;
-  workspace_id: string;
+  workspace_id?: string;
   name: string;
   value?: number | null;
   currency: string;
@@ -108,7 +117,7 @@ export interface Deal {
 }
 
 export interface CreateDealRequest {
-  workspace_id: string;
+  workspace_id?: string;
   name: string;
   value?: number;
   currency?: string;
@@ -135,7 +144,7 @@ export interface UpdateDealRequest {
 
 export interface Pipeline {
   id: string;
-  workspace_id: string;
+  workspace_id?: string;
   name: string;
   description?: string | null;
   is_default: boolean;
@@ -145,7 +154,7 @@ export interface Pipeline {
 }
 
 export interface CreatePipelineRequest {
-  workspace_id: string;
+  workspace_id?: string;
   name: string;
   description?: string;
   is_default?: boolean;
@@ -159,8 +168,8 @@ export interface CreatePipelineRequest {
 
 export interface Activity {
   id: string;
-  workspace_id: string;
-  type: string;
+  workspace_id?: string;
+  type: ActivityType;
   subject: string;
   description?: string | null;
   contact_id?: string | null;
@@ -172,6 +181,10 @@ export interface Activity {
 
 export type ActivityType = 'note' | 'call' | 'email' | 'meeting' | 'task';
 
+export type LifecycleStage = 'lead' | 'qualified' | 'opportunity' | 'customer' | 'churned' | 'inactive';
+
+export type ContactSource = 'manual' | 'import' | 'website' | 'referral' | 'social' | 'email' | 'api' | 'other';
+
 export type CustomFieldType =
   | 'text'
   | 'number'
@@ -182,7 +195,7 @@ export type CustomFieldType =
 
 export interface CustomFieldDefinition {
   id: string;
-  workspace_id: string;
+  workspace_id?: string;
   name: string;
   key: string;
   description?: string;
@@ -196,7 +209,7 @@ export interface CustomFieldDefinition {
 }
 
 export interface CreateCustomFieldDefinitionRequest {
-  workspace_id: string;
+  workspace_id?: string;
   name: string;
   key: string;
   description?: string;
@@ -209,10 +222,53 @@ export interface CreateCustomFieldDefinitionRequest {
 
 export interface UpdateCustomFieldDefinitionRequest {
   name?: string;
+  key?: string;
   description?: string;
   field_type?: CustomFieldType;
   config?: Record<string, unknown>;
   is_required?: boolean;
   is_active?: boolean;
   display_order?: number;
+}
+
+// ─── Notification Types ────────────────────────────────────
+
+export type NotificationType = 'info' | 'success' | 'warning' | 'error';
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message?: string;
+  read: boolean;
+  created_at?: string;
+}
+
+// ─── Auth Types ────────────────────────────────────────────
+
+export interface AuthTokens {
+  access_token: string;
+  refresh_token: string;
+  token_type?: string;
+  expires_in?: number;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  confirm_password?: string;
+  display_name?: string;
+}
+
+// ─── Workspace Types ───────────────────────────────────────
+
+export interface Workspace {
+  id: string;
+  name: string;
+  is_default: boolean;
 }

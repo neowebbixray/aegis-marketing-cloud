@@ -1,4 +1,5 @@
 """Email tasks — send transactional and campaign emails."""
+
 from app.tasks import celery_app
 
 

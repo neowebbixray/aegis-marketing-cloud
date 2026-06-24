@@ -253,7 +253,7 @@ export default function WebhooksPage() {
         status: statusFilter !== 'all' ? (statusFilter as WebhookStatus) : undefined,
       });
       setWebhooks(res.data);
-      setTotal(res.meta.total);
+      setTotal(res.meta?.total ?? 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load webhooks');
       setWebhooks([]);

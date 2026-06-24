@@ -3,7 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useContact, useContactActivities } from '@/hooks/use-contacts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { aiApi } from '@/lib/api';
+import { aiApi } from '@/lib/api/ai';
 import {
   ArrowLeft,
   Mail,
@@ -131,11 +131,12 @@ export default function ContactDetailPage() {
   const queryClient = useQueryClient();
   const { data: contactData, isLoading, error } = useContact(id);
   const { data: activitiesData } = useContactActivities(id);
+  const activities = activitiesData?.data ?? [];
 
   const contact = contactData?.data;
 
   // Mutation for rescoring lead with AI
-  const { mutate: rescoreLead, isLoading: isRescoring } = useMutation({
+  const { mutate: rescoreLead, isPending: isRescoring } = useMutation({
     mutationFn: (contactId: string) =>
       aiApi.scoreLead({ contact_id: contactId, tenant_id: contact?.tenant_id ?? '' }),
     onSuccess: () => {
@@ -179,7 +180,7 @@ export default function ContactDetailPage() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <Avatar className="h-14 w-14">
-            <AvatarImage src={contact.avatar_url} />
+            <AvatarImage src={contact.avatar_url ?? undefined} />
             <AvatarFallback className="text-lg">
               {getInitials(`${contact.first_name} ${contact.last_name}`)}
             </AvatarFallback>
@@ -194,7 +195,7 @@ export default function ContactDetailPage() {
               </Badge>
             </div>
             <p className="text-muted-foreground">
-              {contact.job_title ? `${contact.job_title} at ` : ''}
+              {contact.position ? `${contact.position} at ` : ''}
               {contact.company || 'No company'}
             </p>
           </div>
@@ -243,12 +244,12 @@ export default function ContactDetailPage() {
                 <InfoRow icon={Mail} label="Email" value={contact.email} />
                 <InfoRow icon={Phone} label="Phone" value={contact.phone} />
                 <InfoRow icon={Building2} label="Company" value={contact.company} />
-                <InfoRow icon={MapPin} label="Job Title" value={contact.job_title} />
+                <InfoRow icon={MapPin} label="Job Title" value={contact.position} />
                 <InfoRow icon={Calendar} label="Created" value={formatDate(contact.created_at)} />
                 {/* Lead Score */}
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Lead Score</span>
-                  <ScoreBadge score={contact.score} />
+                  <ScoreBadge score={contact.score ?? undefined} />
                 </div>
                 {/* Rescore with AI button */}
                 {!isRescoring && (
@@ -280,7 +281,7 @@ export default function ContactDetailPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Source</span>
                   <Badge variant="outline">
-                    {contact.source.charAt(0).toUpperCase() + contact.source.slice(1)}
+                    {contact.source?.charAt(0).toUpperCase()}{contact.source?.slice(1) || 'Unknown'}
                   </Badge>
                 </div>
                 <Separator />
@@ -349,7 +350,7 @@ export default function ContactDetailPage() {
                         </div>
                         <div className="flex-1 space-y-1">
                           <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium">{activity.title}</p>
+                            <p className="text-sm font-medium">{activity.subject}</p>
                             <span className="text-xs text-muted-foreground">
                               {formatDateTime(activity.created_at)}
                             </span>

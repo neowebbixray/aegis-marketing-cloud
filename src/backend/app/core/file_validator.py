@@ -1,5 +1,4 @@
-"""
-File validation service: magic-byte detection, MIME whitelist, size limits.
+"""File validation service: magic-byte detection, MIME whitelist, size limits.
 
 Provides a single ``validate_file()`` entry point that checks:
 
@@ -19,20 +18,14 @@ Usage::
 
 from __future__ import annotations
 
-import io
-import mimetypes
 import os
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Optional
+from dataclasses import dataclass
 
-from app.config import settings
 from app.core.magic_bytes import (
     FileCategory,
     detect_mime_type,
     get_file_category,
     verify_extension,
-    MAGIC_BYTES_READ_SIZE,
 )
 
 # ── Size limits (in bytes) per category ─────────────────────────────────────
@@ -40,11 +33,11 @@ from app.core.magic_bytes import (
 # For now they are constants that match the task specification.
 
 DEFAULT_SIZE_LIMITS: dict[FileCategory, int] = {
-    FileCategory.IMAGE: 10 * 1024 * 1024,      # 10 MB
-    FileCategory.VIDEO: 500 * 1024 * 1024,      # 500 MB
-    FileCategory.DOCUMENT: 50 * 1024 * 1024,    # 50 MB
-    FileCategory.AUDIO: 100 * 1024 * 1024,      # 100 MB
-    FileCategory.OTHER: 50 * 1024 * 1024,       # 50 MB (catch-all)
+    FileCategory.IMAGE: 10 * 1024 * 1024,  # 10 MB
+    FileCategory.VIDEO: 500 * 1024 * 1024,  # 500 MB
+    FileCategory.DOCUMENT: 50 * 1024 * 1024,  # 50 MB
+    FileCategory.AUDIO: 100 * 1024 * 1024,  # 100 MB
+    FileCategory.OTHER: 50 * 1024 * 1024,  # 50 MB (catch-all)
 }
 
 # ── Allowed MIME types (configurable) ───────────────────────────────────────
@@ -169,6 +162,7 @@ class FileValidationResult:
         size_limit_bytes: The maximum allowed size for this category.
         error: Human-readable error message when ``is_valid`` is ``False``.
         error_code: Machine-readable error code for programmatic handling.
+
     """
 
     is_valid: bool = True
@@ -219,11 +213,10 @@ def validate_file(
     Returns:
         A :class:`FileValidationResult` with ``is_valid`` set to ``True`` only
         when all checks pass.
+
     """
     result = FileValidationResult()
-    allowed = (
-        allowed_mime_types if allowed_mime_types is not None else _ALLOWED_MIME_SET
-    )
+    allowed = allowed_mime_types if allowed_mime_types is not None else _ALLOWED_MIME_SET
     limits = size_limits if size_limits is not None else DEFAULT_SIZE_LIMITS
 
     # ── 0. Record basic info ────────────────────────────────────────────────
@@ -252,12 +245,11 @@ def validate_file(
 
     if detected:
         result.category = get_file_category(detected)
+    # Unknown type — try to guess from extension
+    elif ext:
+        result.category = get_file_category(result.extension_mime or "application/octet-stream")
     else:
-        # Unknown type — try to guess from extension
-        if ext:
-            result.category = get_file_category(result.extension_mime or "application/octet-stream")
-        else:
-            result.category = FileCategory.OTHER
+        result.category = FileCategory.OTHER
 
     # Now we have a category — check size
     size_limit = limits.get(result.category, limits[FileCategory.OTHER])
@@ -292,22 +284,19 @@ def validate_file(
     # ── 3. MIME whitelist check ─────────────────────────────────────────────
     if detected not in allowed:
         result.is_valid = False
-        result.error = (
-            f"File type '{detected}' is not in the allowed types whitelist."
-        )
+        result.error = f"File type '{detected}' is not in the allowed types whitelist."
         result.error_code = "MIME_NOT_ALLOWED"
         return result
 
     # ── 4. Extension consistency ────────────────────────────────────────────
-    if filename and ext:
-        if not verify_extension(filename, detected):
-            result.is_valid = False
-            result.error = (
-                f"File extension '{ext}' does not match detected type "
-                f"'{detected}'. Possible mismatch or spoofed extension."
-            )
-            result.error_code = "EXTENSION_MISMATCH"
-            return result
+    if filename and ext and not verify_extension(filename, detected):
+        result.is_valid = False
+        result.error = (
+            f"File extension '{ext}' does not match detected type "
+            f"'{detected}'. Possible mismatch or spoofed extension."
+        )
+        result.error_code = "EXTENSION_MISMATCH"
+        return result
 
     # ── 5. Content-Type header consistency (optional) ──────────────────────
     if content_type and detected:
@@ -331,7 +320,7 @@ def _get_extension(filename: str | None) -> str | None:
     if not filename:
         return None
     _, ext = os.path.splitext(filename)
-    return ext if ext else None
+    return ext or None
 
 
 def _human_size(bytes_: int) -> str:

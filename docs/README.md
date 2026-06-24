@@ -41,6 +41,20 @@
 
 ---
 
+## Engineering Health Status
+
+| Category | Status | Details |
+|----------|--------|---------|
+| Ruff (Python lint) | ✅ Clean | 0 errors, 0 warnings across `app/` |
+| Mypy (type check) | ✅ Core clean | Overrides for missing stubs (jose, passlib, redis) |
+| Bandit (SAST) | ✅ High: 0 | 0 high-severity, 6 medium, 15 low |
+| CI validator | ✅ All 7/7 PASS | Structure, files, Docker, secrets, configs |
+| Docker Compose | ✅ Config valid | `docker compose config` parses clean |
+| .gitignore | ✅ Complete | Covers pyc, env, node_modules, .next, terraform, coverage |
+| Python version | ✅ 3.11 + 3.12 | Local 3.11 (PEP 695 → Generic[T]), CI 3.12 (native) |
+
+---
+
 ## Repository Structure
 
 ```

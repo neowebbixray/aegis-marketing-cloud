@@ -1,5 +1,4 @@
-"""
-Tests for the CRM endpoints: contacts, deals, pipelines, activities,
+"""Tests for the CRM endpoints: contacts, deals, pipelines, activities,
 custom field definitions, lead scoring, and tenant isolation.
 
 Uses factory-based fixtures from ``tests.factories.crm``.
@@ -7,16 +6,12 @@ Uses factory-based fixtures from ``tests.factories.crm``.
 
 from __future__ import annotations
 
-import uuid
-from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
+from app.models.crm import Contact, CustomFieldDefinition, Deal, Pipeline, PipelineStage
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models.crm import Activity, Contact, CustomFieldDefinition, Deal, Pipeline, PipelineStage
-
 
 # ─── Contacts ─────────────────────────────────────────────────────────────────
 
@@ -320,10 +315,16 @@ async def test_move_deal_stage(
     await db_session.flush()
 
     stage1 = PipelineStage(
-        pipeline_id=pipeline.id, name="New Lead", order=0, probability=10.0,
+        pipeline_id=pipeline.id,
+        name="New Lead",
+        order=0,
+        probability=10.0,
     )
     stage2 = PipelineStage(
-        pipeline_id=pipeline.id, name="Qualified", order=1, probability=50.0,
+        pipeline_id=pipeline.id,
+        name="Qualified",
+        order=1,
+        probability=50.0,
     )
     db_session.add_all([stage1, stage2])
     await db_session.flush()
@@ -474,7 +475,9 @@ async def test_get_pipeline_with_stages(
     await db_session.flush()
 
     stage = PipelineStage(
-        pipeline_id=pipeline.id, name="New", order=0,
+        pipeline_id=pipeline.id,
+        name="New",
+        order=0,
     )
     db_session.add(stage)
     await db_session.flush()
@@ -648,7 +651,7 @@ async def test_tenant_isolation(
     """Tenant A cannot see contacts belonging to Tenant B."""
     from app.services.crm import ContactService
 
-    contact_a = ContactFactory(
+    ContactFactory(
         tenant_id=test_tenant.id,
         workspace_id=uuid4(),
         first_name="Alice",
@@ -658,7 +661,7 @@ async def test_tenant_isolation(
     await db_session.flush()
 
     tenant_b_id = uuid4()
-    contact_b = ContactFactory(
+    ContactFactory(
         tenant_id=tenant_b_id,
         workspace_id=uuid4(),
         first_name="Bob",
@@ -738,7 +741,10 @@ async def test_deal_service_create(
     await db_session.flush()
 
     stage = PipelineStage(
-        pipeline_id=pipeline.id, name="New", order=0, probability=10.0,
+        pipeline_id=pipeline.id,
+        name="New",
+        order=0,
+        probability=10.0,
     )
     db_session.add(stage)
     await db_session.flush()
@@ -776,13 +782,22 @@ async def test_deal_service_move_stage_twice(
     await db_session.flush()
 
     stage1 = PipelineStage(
-        pipeline_id=pipeline.id, name="Lead", order=0, probability=10.0,
+        pipeline_id=pipeline.id,
+        name="Lead",
+        order=0,
+        probability=10.0,
     )
     stage2 = PipelineStage(
-        pipeline_id=pipeline.id, name="Qualified", order=1, probability=50.0,
+        pipeline_id=pipeline.id,
+        name="Qualified",
+        order=1,
+        probability=50.0,
     )
     stage3 = PipelineStage(
-        pipeline_id=pipeline.id, name="Closed Won", order=2, probability=100.0,
+        pipeline_id=pipeline.id,
+        name="Closed Won",
+        order=2,
+        probability=100.0,
     )
     db_session.add_all([stage1, stage2, stage3])
     await db_session.flush()
@@ -866,7 +881,9 @@ async def test_pipeline_service_get_with_stages(
     await db_session.flush()
 
     stage = PipelineStage(
-        pipeline_id=pipeline.id, name="Only Stage", order=0,
+        pipeline_id=pipeline.id,
+        name="Only Stage",
+        order=0,
     )
     db_session.add(stage)
     await db_session.flush()
@@ -921,7 +938,9 @@ async def test_custom_field_service_crud(
     await service.soft_delete(field_def.id, tenant_id=test_tenant.id)
 
     # Verify deleted
-    with pytest.raises(Exception):
+    from app.core.exceptions import NotFoundException
+
+    with pytest.raises(NotFoundException):
         await service.get(field_def.id, tenant_id=test_tenant.id)
 
 
@@ -959,7 +978,5 @@ async def test_activity_service_crud(
 
     # Soft delete
     await service.soft_delete(activity.id, tenant_id=test_tenant.id)
-    items_after, total_after = await service.list(tenant_id=test_tenant.id)
+    _items_after, total_after = await service.list(tenant_id=test_tenant.id)
     assert total_after == 0
-
-

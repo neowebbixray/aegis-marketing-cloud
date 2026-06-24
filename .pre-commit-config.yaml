@@ -1,0 +1,43 @@
+# ─── Aegis Marketing Cloud — Pre-Commit Hooks ─────────────────────────────
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: \.(md|yml|yaml)$
+      - id: end-of-file-fixer
+        exclude: \.(md|svg)$
+      - id: check-yaml
+        exclude: ^helm/
+      - id: check-json
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^src/backend/
+      - id: ruff-format
+        files: ^src/backend/
+
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        types_or: [javascript, jsx, typescript, tsx, css, json, yaml]
+        files: ^src/frontend/
+
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v9.0.0
+    hooks:
+      - id: eslint
+        files: ^src/frontend/.*\.(js|jsx|ts|tsx)$
+        types: [file]
+        additional_dependencies:
+          - eslint@9.0.0

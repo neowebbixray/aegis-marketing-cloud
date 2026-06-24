@@ -1,5 +1,4 @@
-"""
-SEO service: keyword tracking, rank tracking, site audit, backlink analysis.
+"""SEO service: keyword tracking, rank tracking, site audit, backlink analysis.
 
 All operations are tenant-scoped. Uses the ``SeoKeyword`` SQLAlchemy model
 for persisting keyword data.
@@ -9,15 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import BackgroundTasks
-from sqlalchemy import Select, desc, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import desc, select
 from sqlalchemy.sql import ColumnElement
 
-from app.core.exceptions import NotFoundException, ValidationException
+from app.core.exceptions import NotFoundException
 from app.models.marketing import Campaign
 from app.models.seo import SeoKeyword
 from app.services.base import BaseService
@@ -60,7 +58,9 @@ class KeywordService(BaseService):
 
         logger.info(
             "Tracking keyword '%s' for tenant %s (id=%s)",
-            keyword, tenant_id, obj.id,
+            keyword,
+            tenant_id,
+            obj.id,
         )
 
         return self._keyword_to_dict(obj)
@@ -171,9 +171,7 @@ class KeywordService(BaseService):
             "previous_rank": obj.previous_rank,
             "search_volume": obj.search_volume,
             "difficulty_score": obj.difficulty_score,
-            "last_checked_at": (
-                obj.last_checked_at.isoformat() if obj.last_checked_at else None
-            ),
+            "last_checked_at": (obj.last_checked_at.isoformat() if obj.last_checked_at else None),
             "created_at": obj.created_at.isoformat() if obj.created_at else None,
             "updated_at": obj.updated_at.isoformat() if obj.updated_at else None,
         }
@@ -217,7 +215,9 @@ class SiteAuditService(BaseService):
         }
         logger.info(
             "Initiating site audit for %s (depth=%d, workspace=%s)",
-            url, depth, workspace_id,
+            url,
+            depth,
+            workspace_id,
         )
 
         # Dispatch background crawl simulation if a task queue is provided
@@ -231,11 +231,13 @@ class SiteAuditService(BaseService):
             )
             logger.debug(
                 "Dispatched simulated crawl for audit %s (url=%s)",
-                audit_id, url,
+                audit_id,
+                url,
             )
         else:
             logger.debug(
-                "No background_tasks provided — crawl simulation skipped for %s", url,
+                "No background_tasks provided — crawl simulation skipped for %s",
+                url,
             )
 
         return audit_record
@@ -254,12 +256,16 @@ class SiteAuditService(BaseService):
         """
         logger.info(
             "[SIMULATED CRAWL] audit=%s url=%s depth=%d workspace=%s — starting",
-            audit_id, url, depth, workspace_id,
+            audit_id,
+            url,
+            depth,
+            workspace_id,
         )
         await asyncio.sleep(2)  # pretend we're doing work
         logger.info(
             "[SIMULATED CRAWL] audit=%s url=%s — complete",
-            audit_id, url,
+            audit_id,
+            url,
         )
 
     async def list_audits(

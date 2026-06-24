@@ -1,5 +1,4 @@
-"""
-Analytics service: event tracking, metrics aggregation, dashboards, reports,
+"""Analytics service: event tracking, metrics aggregation, dashboards, reports,
 and analytical queries.
 
 All tenant-scoped operations require a ``tenant_id`` UUID.
@@ -8,11 +7,11 @@ All tenant-scoped operations require a ``tenant_id`` UUID.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, select, func, and_, desc, cast, Date
+from sqlalchemy import Date, and_, cast, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException, ValidationException
@@ -33,6 +32,7 @@ DEFAULT_METRICS_TTL_DAYS = 90
 # ═══════════════════════════════════════════════════════════════════════════════
 # AnalyticsService — comprehensive analytics pipeline
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class AnalyticsService:
     """High-level analytics operations for a single tenant context.
@@ -57,7 +57,7 @@ class AnalyticsService:
         aggregated into ``MetricSnapshot`` if it matches known metric
         patterns (e.g. counter-type events).
         """
-        now = event.timestamp or datetime.now(timezone.utc)
+        now = event.timestamp or datetime.now(UTC)
         db_event = AnalyticsEvent(
             tenant_id=tenant_id,
             user_id=event.user_id,
@@ -86,7 +86,7 @@ class AnalyticsService:
     ) -> list[AnalyticsEvent]:
         """Ingest multiple analytics events in a single batch."""
         db_events: list[AnalyticsEvent] = []
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         for event in events:
             ts = event.timestamp or now
@@ -164,10 +164,10 @@ class AnalyticsService:
         if granularity not in SUPPORTED_GRANULARITIES:
             raise ValidationException(
                 detail=f"Unsupported granularity '{granularity}'. "
-                f"Must be one of: {', '.join(sorted(SUPPORTED_GRANULARITIES))}"
+                f"Must be one of: {', '.join(sorted(SUPPORTED_GRANULARITIES))}",
             )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         start = start_date or (now - timedelta(days=30))
         end = end_date or now
 
@@ -193,7 +193,7 @@ class AnalyticsService:
                         MetricSnapshot.metric_name == metric_name,
                         MetricSnapshot.timestamp >= start,
                         MetricSnapshot.timestamp <= end,
-                    )
+                    ),
                 )
                 .group_by("bucket")
                 .order_by("bucket")
@@ -204,14 +204,16 @@ class AnalyticsService:
                 for dim_key, dim_value in filters.items():
                     # JSONB field access
                     stmt = stmt.where(
-                        MetricSnapshot.dimensions[dim_key].as_string() == str(dim_value)
+                        MetricSnapshot.dimensions[dim_key].as_string() == str(dim_value),
                     )
 
             result = await self.db.execute(stmt)
             rows = result.all()
             results[metric_name] = [
                 {
-                    "timestamp": row.bucket.isoformat() if hasattr(row.bucket, "isoformat") else str(row.bucket),
+                    "timestamp": row.bucket.isoformat()
+                    if hasattr(row.bucket, "isoformat")
+                    else str(row.bucket),
                     "value": float(row.total),
                     "dimensions": filters or {},
                 }
@@ -244,7 +246,8 @@ class AnalyticsService:
             widget_data = dict(widget) if isinstance(widget, dict) else widget
             if isinstance(widget_data, dict):
                 computed = await self._compute_widget_data(
-                    tenant_id, widget_data
+                    tenant_id,
+                    widget_data,
                 )
                 widget_data["data"] = computed
                 enriched_widgets.append(widget_data)
@@ -268,26 +271,23 @@ class AnalyticsService:
 
         granularity = config.get("granularity", "day")
         days_back = config.get("days_back", 30)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
-        stmt = (
-            select(
-                func.sum(MetricSnapshot.value).label("total"),
-            )
-            .where(
-                and_(
-                    MetricSnapshot.tenant_id == tenant_id,
-                    MetricSnapshot.metric_name == metric,
-                    MetricSnapshot.timestamp >= (now - timedelta(days=days_back)),
-                )
-            )
+        stmt = select(
+            func.sum(MetricSnapshot.value).label("total"),
+        ).where(
+            and_(
+                MetricSnapshot.tenant_id == tenant_id,
+                MetricSnapshot.metric_name == metric,
+                MetricSnapshot.timestamp >= (now - timedelta(days=days_back)),
+            ),
         )
         # Apply optional dimension filter from widget config
         dimension_filter = config.get("dimension_filter")
         if dimension_filter and isinstance(dimension_filter, dict):
             for k, v in dimension_filter.items():
                 stmt = stmt.where(
-                    MetricSnapshot.dimensions[k].as_string() == str(v)
+                    MetricSnapshot.dimensions[k].as_string() == str(v),
                 )
 
         result = await self.db.execute(stmt)
@@ -308,9 +308,7 @@ class AnalyticsService:
     ) -> tuple[list[Dashboard], int]:
         """List dashboards for the tenant with pagination."""
         count_stmt = (
-            select(func.count())
-            .select_from(Dashboard)
-            .where(Dashboard.tenant_id == tenant_id)
+            select(func.count()).select_from(Dashboard).where(Dashboard.tenant_id == tenant_id)
         )
         count_result = await self.db.execute(count_stmt)
         total = count_result.scalar() or 0
@@ -418,7 +416,7 @@ class AnalyticsService:
         metric_names = config.get("metric_names", [f"event.{report.report_type}.count"])
         granularity = config.get("granularity", "day")
         days_back = config.get("days_back", 30)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         metrics_data = await self.query_metrics(
             tenant_id=tenant_id,
@@ -471,7 +469,9 @@ class AnalyticsService:
         await self.db.refresh(report)
 
         logger.info(
-            "Scheduled report %s with cron '%s'", report_id, cron_expression
+            "Scheduled report %s with cron '%s'",
+            report_id,
+            cron_expression,
         )
         return report
 
@@ -483,12 +483,13 @@ class AnalyticsService:
         period_days: int = 7,
     ) -> list[dict[str, Any]]:
         """Get distinct active user counts per day for the given period."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         start = now - timedelta(days=period_days)
 
         # Truncate to day
         day_expr = cast(
-            func.date_trunc("day", AnalyticsEvent.timestamp), Date
+            func.date_trunc("day", AnalyticsEvent.timestamp),
+            Date,
         )
 
         stmt = (
@@ -501,7 +502,7 @@ class AnalyticsService:
                     AnalyticsEvent.tenant_id == tenant_id,
                     AnalyticsEvent.timestamp >= start,
                     AnalyticsEvent.user_id.isnot(None),
-                )
+                ),
             )
             .group_by("date")
             .order_by("date")
@@ -534,7 +535,7 @@ class AnalyticsService:
                     AnalyticsEvent.tenant_id == tenant_id,
                     AnalyticsEvent.timestamp >= start_date,
                     AnalyticsEvent.timestamp <= end_date,
-                )
+                ),
             )
             .group_by(AnalyticsEvent.event_name)
             .order_by(desc("count"))
@@ -570,7 +571,7 @@ class AnalyticsService:
                     MetricSnapshot.tenant_id == tenant_id,
                     MetricSnapshot.metric_name == metric_name,
                     MetricSnapshot.dimensions["entity_type"].as_string() == entity_type,
-                )
+                ),
             )
             .group_by("entity_id")
             .order_by(desc("total"))
@@ -584,13 +585,15 @@ class AnalyticsService:
                 "entity_id": row.entity_id,
                 f"total_{metric}": float(row.total),
             }
-            for row in rows if row.entity_id
+            for row in rows
+            if row.entity_id
         ]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Legacy Services (kept for backwards compatibility with existing router)
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class CampaignAnalyticsService:
     """Compute and retrieve analytics for marketing campaigns."""
@@ -609,7 +612,7 @@ class CampaignAnalyticsService:
                 Campaign.id == campaign_id,
                 Campaign.tenant_id == tenant_id,
                 Campaign.deleted_at.is_(None),
-            )
+            ),
         )
         campaign = result.scalars().first()
         if campaign is None:
@@ -669,7 +672,7 @@ class FunnelAnalyticsService:
                     Funnel.id == funnel_id,
                     Funnel.tenant_id == tenant_id,
                     Funnel.deleted_at.is_(None),
-                )
+                ),
             )
             funnel = result.scalars().first()
             if funnel is None:
@@ -721,8 +724,7 @@ class ReportService(BaseService):
         await self.db.flush()
         await self.db.refresh(report)
 
-        logger.info("Created report '%s' (type=%s) for tenant %s",
-                     name, report_type, tenant_id)
+        logger.info("Created report '%s' (type=%s) for tenant %s", name, report_type, tenant_id)
         return {
             "id": str(report.id),
             "name": report.title,
@@ -752,8 +754,12 @@ class ReportService(BaseService):
             stmt = stmt.where(ScheduledReport.report_type == report_type)
         stmt = stmt.order_by(desc(ScheduledReport.created_at)).offset(skip).limit(limit)
 
-        count_stmt = select(func.count()).select_from(ScheduledReport).where(
-            ScheduledReport.tenant_id == tenant_id,
+        count_stmt = (
+            select(func.count())
+            .select_from(ScheduledReport)
+            .where(
+                ScheduledReport.tenant_id == tenant_id,
+            )
         )
         if report_type:
             count_stmt = count_stmt.where(ScheduledReport.report_type == report_type)
@@ -887,7 +893,7 @@ class DashboardService(BaseService):
                         widgets[i][k] = v
                 dashboard.widgets = widgets
                 await self.db.flush()
-                return widgets[i]
+                return w
 
         raise NotFoundException(detail="Widget not found")
 
@@ -899,8 +905,11 @@ class DashboardService(BaseService):
         if dashboard is None:
             raise NotFoundException(detail="No dashboard found")
 
-        widgets = [w for w in (dashboard.widgets or [])
-                   if not (isinstance(w, dict) and w.get("widget_id") == str(widget_id))]
+        widgets = [
+            w
+            for w in (dashboard.widgets or [])
+            if not (isinstance(w, dict) and w.get("widget_id") == str(widget_id))
+        ]
         dashboard.widgets = widgets
         await self.db.flush()
         logger.info("Deleted dashboard widget %s", widget_id)

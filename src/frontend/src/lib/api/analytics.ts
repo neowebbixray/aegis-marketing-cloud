@@ -308,5 +308,5 @@ export const analyticsApi = {
   }) =>
     apiClient.get<Blob>('/api/v1/analytics/export', {
       ...params,
-    } as Record<string, string | number | boolean | undefined>),
+    } as Record<string, string | number | boolean | string[] | undefined>),
 };

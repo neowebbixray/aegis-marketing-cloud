@@ -1,11 +1,8 @@
-"""
-Pydantic schemas for authentication and identity endpoints.
-"""
+"""Pydantic schemas for authentication and identity endpoints."""
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -18,7 +15,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
     display_name: str = Field(..., min_length=1, max_length=128)
-    tenant_name: Optional[str] = Field(None, max_length=256)
+    tenant_name: str | None = Field(None, max_length=256)
 
     @field_validator("password")
     @classmethod
@@ -69,10 +66,10 @@ class ChangePasswordRequest(BaseModel):
 class UpdateMeRequest(BaseModel):
     """Payload for PATCH /auth/me."""
 
-    display_name: Optional[str] = Field(None, min_length=1, max_length=128)
-    avatar_url: Optional[str] = None
-    locale: Optional[str] = Field(None, max_length=10)
-    timezone: Optional[str] = Field(None, max_length=64)
+    display_name: str | None = Field(None, min_length=1, max_length=128)
+    avatar_url: str | None = None
+    locale: str | None = Field(None, max_length=10)
+    timezone: str | None = Field(None, max_length=64)
 
 
 # ── Responses ────────────────────────────────────────────────────────────────
@@ -91,7 +88,7 @@ class UserResponse(BaseModel):
     id: UUID
     email: str
     display_name: str
-    avatar_url: Optional[str] = None
+    avatar_url: str | None = None
     is_active: bool
     created_at: datetime
 
@@ -104,9 +101,9 @@ class ApiKeyResponse(BaseModel):
     id: UUID
     name: str
     key_prefix: str
-    scopes: Optional[list[str]] = None
+    scopes: list[str] | None = None
     created_at: datetime
-    last_used_at: Optional[datetime] = None
+    last_used_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

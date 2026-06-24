@@ -1,5 +1,4 @@
-"""
-Billing router: subscriptions, invoices, credit wallet, usage, and Stripe webhook.
+"""Billing router: subscriptions, invoices, credit wallet, usage, and Stripe webhook.
 
 All endpoints (except POST /billing/webhook) require an authenticated active
 user and tenant context.  Responses use the standard ``{data, meta, links}``
@@ -8,28 +7,22 @@ envelope for lists and ``{data: {...}}`` for single resources.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from decimal import Decimal
-from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_user, get_db, get_tenant_context
 from app.models.auth import User
-from app.models.billing import Invoice, Subscription
 from app.schemas.base import build_list_response, build_single_response
 from app.schemas.billing import (
+    InvoiceResponse,
     SubscriptionCancel,
     SubscriptionCreate,
     SubscriptionResponse,
     SubscriptionUpdate,
-    InvoiceResponse,
     WalletResponse,
     WalletTopUp,
-    UsageRecordResponse,
-    UsageSummaryResponse,
 )
 from app.services.billing import BillingService
 
@@ -167,7 +160,10 @@ async def list_invoices(
     skip = (page - 1) * limit
     service = BillingService(db)
     items, total = await service._get_invoice_list(
-        tenant_id, status=status, skip=skip, limit=limit
+        tenant_id,
+        status=status,
+        skip=skip,
+        limit=limit,
     )
     return build_list_response(
         data=[InvoiceResponse.model_validate(inv) for inv in items],
@@ -266,7 +262,7 @@ async def get_usage_summary(
         {
             "subscription_id": str(subscription_id),
             "metrics": summary,
-        }
+        },
     )
 
 

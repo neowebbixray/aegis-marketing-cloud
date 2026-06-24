@@ -102,8 +102,8 @@ export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="flex items-center gap-2 px-2">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={user?.avatar_url} />
-                  <AvatarFallback>{user ? getInitials(user.display_name) : 'U'}</AvatarFallback>
+                  <AvatarImage src={user?.avatar_url ?? undefined} />
+                  <AvatarFallback>{user ? getInitials(user.display_name ?? '') : 'U'}</AvatarFallback>
                 </Avatar>
                 <div className="hidden md:block text-left">
                   <p className="text-sm font-medium leading-none">{user?.display_name}</p>

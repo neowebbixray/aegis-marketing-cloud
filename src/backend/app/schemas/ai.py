@@ -1,18 +1,17 @@
-"""
-Pydantic schemas for the AI module: agents, conversations, content generation,
+"""Pydantic schemas for the AI module: agents, conversations, content generation,
 classification, translation, summarisation, and execution history.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-
 # ── Agent Definitions ──────────────────────────────────────────────────────────
+
 
 class AgentDefinition(BaseModel):
     """Definition of a single AI agent type (built-in catalog entry)."""
@@ -33,13 +32,16 @@ class AgentListResponse(BaseModel):
 
 # ── Agent Execution ────────────────────────────────────────────────────────────
 
+
 class AgentExecuteRequest(BaseModel):
     """Payload for POST /ai/agents/{agent_type}/execute."""
 
     input_data: dict[str, Any] = Field(..., description="Input payload for the agent")
     tenant_id: UUID = Field(..., description="Tenant context")
-    conversation_id: Optional[UUID] = Field(None, description="Optional conversation to attach this execution to")
-    user_id: Optional[UUID] = Field(None, description="User initiating the execution")
+    conversation_id: UUID | None = Field(
+        None, description="Optional conversation to attach this execution to"
+    )
+    user_id: UUID | None = Field(None, description="User initiating the execution")
 
 
 class AgentExecuteResponse(BaseModel):
@@ -47,14 +49,15 @@ class AgentExecuteResponse(BaseModel):
 
     agent_type: str
     status: str
-    output: Optional[dict[str, Any]] = None
-    execution_id: Optional[UUID] = None
-    tokens_used: Optional[int] = None
-    duration_ms: Optional[int] = None
-    error: Optional[str] = None
+    output: dict[str, Any] | None = None
+    execution_id: UUID | None = None
+    tokens_used: int | None = None
+    duration_ms: int | None = None
+    error: str | None = None
 
 
 # ── Conversations ──────────────────────────────────────────────────────────────
+
 
 class MessageCreate(BaseModel):
     """Payload for posting a new message to a conversation."""
@@ -71,8 +74,8 @@ class MessageResponse(BaseModel):
     conversation_id: UUID
     role: str
     content: str
-    tool_calls: Optional[list[Any]] = None
-    metadata: Optional[dict[str, Any]] = None
+    tool_calls: list[Any] | None = None
+    metadata: dict[str, Any] | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -81,10 +84,10 @@ class MessageResponse(BaseModel):
 class ConversationCreate(BaseModel):
     """Payload for creating a new conversation."""
 
-    title: Optional[str] = Field(None, max_length=255)
+    title: str | None = Field(None, max_length=255)
     user_id: UUID
     tenant_id: UUID
-    agent_type: Optional[str] = Field(None, description="Optional agent type to associate")
+    agent_type: str | None = Field(None, description="Optional agent type to associate")
 
 
 class ConversationResponse(BaseModel):
@@ -93,8 +96,8 @@ class ConversationResponse(BaseModel):
     id: UUID
     tenant_id: UUID
     user_id: UUID
-    title: Optional[str] = None
-    agent_id: Optional[UUID] = None
+    title: str | None = None
+    agent_id: UUID | None = None
     message_count: int = 0
     is_archived: bool = False
     created_at: datetime
@@ -109,8 +112,8 @@ class ConversationDetailResponse(BaseModel):
     id: UUID
     tenant_id: UUID
     user_id: UUID
-    title: Optional[str] = None
-    agent_id: Optional[UUID] = None
+    title: str | None = None
+    agent_id: UUID | None = None
     message_count: int = 0
     is_archived: bool = False
     created_at: datetime
@@ -122,14 +125,17 @@ class ConversationDetailResponse(BaseModel):
 
 # ── Content Generation ─────────────────────────────────────────────────────────
 
+
 class ContentGenerateRequest(BaseModel):
     """Payload for POST /ai/content/generate."""
 
     tenant_id: UUID
     prompt: str = Field(..., min_length=1, max_length=50_000)
-    content_type: str = Field(default="general", description="e.g. blog, social, email, ad, landing_page")
-    tone: Optional[str] = Field(None, description="e.g. professional, casual, urgent, friendly")
-    length: Optional[str] = Field(None, description="e.g. short, medium, long")
+    content_type: str = Field(
+        default="general", description="e.g. blog, social, email, ad, landing_page"
+    )
+    tone: str | None = Field(None, description="e.g. professional, casual, urgent, friendly")
+    length: str | None = Field(None, description="e.g. short, medium, long")
 
 
 class ContentGenerateResponse(BaseModel):
@@ -138,19 +144,20 @@ class ContentGenerateResponse(BaseModel):
     content: str
     content_type: str
     word_count: int
-    tone: Optional[str] = None
+    tone: str | None = None
 
 
 # ── Content Analysis ───────────────────────────────────────────────────────────
+
 
 class ContentAnalyzeRequest(BaseModel):
     """Payload for POST /ai/content/analyze (campaign or content analysis)."""
 
     tenant_id: UUID
-    campaign_id: Optional[UUID] = Field(None, description="Campaign ID for campaign analysis")
-    content_text: Optional[str] = Field(None, description="Raw text content to analyze")
-    image_url: Optional[str] = Field(None, description="Image URL for image description generation")
-    style: Optional[str] = Field(None, description="Art/visual style hint for image description")
+    campaign_id: UUID | None = Field(None, description="Campaign ID for campaign analysis")
+    content_text: str | None = Field(None, description="Raw text content to analyze")
+    image_url: str | None = Field(None, description="Image URL for image description generation")
+    style: str | None = Field(None, description="Art/visual style hint for image description")
 
 
 class ContentAnalyzeResponse(BaseModel):
@@ -158,12 +165,13 @@ class ContentAnalyzeResponse(BaseModel):
 
     analysis: str
     analysis_type: str  # 'campaign', 'content', 'image_description'
-    suggestions: Optional[list[str]] = None
-    image_prompt: Optional[str] = None
-    alt_text: Optional[str] = None
+    suggestions: list[str] | None = None
+    image_prompt: str | None = None
+    alt_text: str | None = None
 
 
 # ── Lead Scoring ───────────────────────────────────────────────────────────────
+
 
 class LeadScoreRequest(BaseModel):
     """Payload for POST /ai/leads/score."""
@@ -183,6 +191,7 @@ class LeadScoreResponse(BaseModel):
 
 # ── Classification ─────────────────────────────────────────────────────────────
 
+
 class ClassificationRequest(BaseModel):
     """Payload for POST /ai/classify."""
 
@@ -194,16 +203,17 @@ class ClassificationResponse(BaseModel):
 
     intent: str
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
-    categories: Optional[list[dict[str, Any]]] = None
+    categories: list[dict[str, Any]] | None = None
 
 
 # ── Translation ────────────────────────────────────────────────────────────────
+
 
 class TranslationRequest(BaseModel):
     """Payload for POST /ai/translate."""
 
     text: str = Field(..., min_length=1, max_length=50_000)
-    source_language: Optional[str] = Field(None, description="Auto-detect if omitted")
+    source_language: str | None = Field(None, description="Auto-detect if omitted")
     target_language: str = Field(..., min_length=2, max_length=50)
 
 
@@ -211,19 +221,22 @@ class TranslationResponse(BaseModel):
     """Translation result."""
 
     translated_text: str
-    source_language: Optional[str] = None
+    source_language: str | None = None
     target_language: str
-    confidence: Optional[float] = None
+    confidence: float | None = None
 
 
 # ── Summarisation ──────────────────────────────────────────────────────────────
 
+
 class SummarizeRequest(BaseModel):
     """Payload for POST /ai/summarize (text or conversation)."""
 
-    text: Optional[str] = Field(None, description="Raw text to summarise")
-    conversation_id: Optional[UUID] = Field(None, description="Conversation ID to summarise")
-    max_length: Optional[int] = Field(None, ge=50, le=2000, description="Approximate max summary length")
+    text: str | None = Field(None, description="Raw text to summarise")
+    conversation_id: UUID | None = Field(None, description="Conversation ID to summarise")
+    max_length: int | None = Field(
+        None, ge=50, le=2000, description="Approximate max summary length"
+    )
 
 
 class SummarizeResponse(BaseModel):
@@ -236,25 +249,27 @@ class SummarizeResponse(BaseModel):
 
 # ── Execution History ──────────────────────────────────────────────────────────
 
+
 class ExecutionHistoryResponse(BaseModel):
     """Single execution record for history listing."""
 
     id: UUID
-    agent_id: Optional[UUID] = None
-    agent_type: Optional[str] = None
+    agent_id: UUID | None = None
+    agent_type: str | None = None
     tenant_id: UUID
     status: str
-    input: Optional[dict[str, Any]] = None
-    output: Optional[dict[str, Any]] = None
-    tokens_used: Optional[int] = None
-    duration_ms: Optional[int] = None
-    error: Optional[str] = None
+    input: dict[str, Any] | None = None
+    output: dict[str, Any] | None = None
+    tokens_used: int | None = None
+    duration_ms: int | None = None
+    error: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
 
 # ── Report Generation ──────────────────────────────────────────────────────────
+
 
 class GenerateReportRequest(BaseModel):
     """Payload for generating an AI-powered report."""
@@ -269,4 +284,4 @@ class GenerateReportResponse(BaseModel):
 
     report: str
     report_type: str
-    summary: Optional[str] = None
+    summary: str | None = None

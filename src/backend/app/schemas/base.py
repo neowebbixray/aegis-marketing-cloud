@@ -1,5 +1,4 @@
-"""
-Unified response envelope and RFC 7807 error handling for the API.
+"""Unified response envelope and RFC 7807 error handling for the API.
 
 Docs mandate:
 - **Success** list endpoint envelopes: ``{data: [...], meta: {page, per_page, total, has_more}, links: {self, next, prev}}``
@@ -9,10 +8,10 @@ Docs mandate:
 
 from __future__ import annotations
 
-from typing import Any, Generic, Optional, TypeVar
+from typing import Generic, TypeVar
 from uuid import uuid4
 
-from fastapi import Request, status
+from fastapi import Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -25,6 +24,7 @@ DataT = TypeVar("DataT")
 
 class PaginationMeta(BaseModel):
     """Pagination metadata per the docs spec."""
+
     page: int = 1
     per_page: int = 50
     total: int = 0
@@ -33,13 +33,15 @@ class PaginationMeta(BaseModel):
 
 class PaginationLinks(BaseModel):
     """Link URLs for navigating paginated resources."""
-    self: Optional[str] = None
-    next: Optional[str] = None
-    prev: Optional[str] = None
+
+    self: str | None = None
+    next: str | None = None
+    prev: str | None = None
 
 
 class ListEnvelope(BaseModel, Generic[T]):
     """Unified list response: ``{data: [...], meta: {...}, links: {...}}``."""
+
     data: list[T]
     meta: PaginationMeta = PaginationMeta()
     links: PaginationLinks = PaginationLinks()
@@ -47,6 +49,7 @@ class ListEnvelope(BaseModel, Generic[T]):
 
 class SingleEnvelope(BaseModel, Generic[DataT]):
     """Unified single-resource response: ``{data: {...}}``."""
+
     data: DataT
 
 
@@ -55,6 +58,7 @@ class SingleEnvelope(BaseModel, Generic[DataT]):
 
 class FieldError(BaseModel):
     """A single field-level validation error."""
+
     field: str
     message: str
     code: str = "invalid"
@@ -82,17 +86,19 @@ ERROR_TYPE_PATHS: dict[int, str] = {
 
 class ErrorDetail(BaseModel):
     """An RFC 7807 Problem Detail wrapped in ``{error: ...}`` per AMC docs."""
+
     type: str
     title: str
     status: int
     detail: str
-    instance: Optional[str] = None
-    trace_id: Optional[str] = None
-    errors: Optional[list[FieldError]] = None
+    instance: str | None = None
+    trace_id: str | None = None
+    errors: list[FieldError] | None = None
 
 
 class ErrorEnvelope(BaseModel):
     """Top-level error envelope: ``{error: {...}}``."""
+
     error: ErrorDetail
 
 
@@ -134,7 +140,7 @@ def build_problem_response(
             instance=str(request.url) if request else None,
             trace_id=trace_id or uuid4().hex[:12],
             errors=field_errors,
-        )
+        ),
     )
     return JSONResponse(
         status_code=status_code,

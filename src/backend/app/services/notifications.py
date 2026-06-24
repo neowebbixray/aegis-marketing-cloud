@@ -1,21 +1,20 @@
-"""
-Notifications service: in-app notifications, email notifications,
+"""Notifications service: in-app notifications, email notifications,
 notification preferences, digest scheduling.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, func, desc, or_, and_, update, delete
+from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundException, ValidationException
-from app.models.notifications import Notification
+from app.core.exceptions import NotFoundException
 from app.models.auth import User
+from app.models.notifications import Notification
 from app.services.base import BaseService
 
 logger = logging.getLogger("amc.services.notifications")
@@ -59,7 +58,11 @@ class NotificationService(BaseService):
 
         logger.info(
             "Created %s notification %s for user %s (type=%s, priority=%s)",
-            channel, notification.id, user_id, notification_type, priority,
+            channel,
+            notification.id,
+            user_id,
+            notification_type,
+            priority,
         )
         # Simulate dispatch via channel (email, websocket, push, etc.)
         logger.info("Dispatched notification %s via channel=%s", notification.id, channel)
@@ -105,11 +108,7 @@ class NotificationService(BaseService):
             base_filters.append(Notification.priority == priority)
 
         # Count
-        count_stmt = (
-            select(func.count())
-            .select_from(Notification)
-            .where(*base_filters)
-        )
+        count_stmt = select(func.count()).select_from(Notification).where(*base_filters)
         total_result = await self.db.execute(count_stmt)
         total = total_result.scalar() or 0
 
@@ -155,7 +154,7 @@ class NotificationService(BaseService):
                 Notification.id == notification_id,
                 Notification.user_id == user_id,
                 Notification.deleted_at.is_(None),
-            )
+            ),
         )
         notification = result.scalars().first()
         if notification is None:
@@ -188,14 +187,14 @@ class NotificationService(BaseService):
                 Notification.id == notification_id,
                 Notification.user_id == user_id,
                 Notification.deleted_at.is_(None),
-            )
+            ),
         )
         notification = result.scalars().first()
         if notification is None:
             raise NotFoundException(detail="Notification not found")
 
         notification.is_read = True
-        notification.read_at = datetime.now(timezone.utc)
+        notification.read_at = datetime.now(UTC)
         await self.db.flush()
         await self.db.refresh(notification)
 
@@ -215,7 +214,7 @@ class NotificationService(BaseService):
 
         Returns the count of notifications updated.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         result = await self.db.execute(
             update(Notification)
             .where(
@@ -224,7 +223,7 @@ class NotificationService(BaseService):
                 Notification.deleted_at.is_(None),
             )
             .values(is_read=True, read_at=now)
-            .returning(func.count(Notification.id))
+            .returning(func.count(Notification.id)),
         )
         count = result.scalar() or 0
         await self.db.flush()
@@ -239,10 +238,14 @@ class NotificationService(BaseService):
     ) -> dict[str, Any]:
         """Get unread notification count, with breakdowns."""
         # Total unread
-        total_stmt = select(func.count()).select_from(Notification).where(
-            Notification.user_id == user_id,
-            Notification.is_read == False,  # noqa: E712
-            Notification.deleted_at.is_(None),
+        total_stmt = (
+            select(func.count())
+            .select_from(Notification)
+            .where(
+                Notification.user_id == user_id,
+                Notification.is_read == False,  # noqa: E712
+                Notification.deleted_at.is_(None),
+            )
         )
         total_result = await self.db.execute(total_stmt)
         total = total_result.scalar() or 0
@@ -291,7 +294,7 @@ class NotificationService(BaseService):
                 Notification.id == notification_id,
                 Notification.user_id == user_id,
                 Notification.deleted_at.is_(None),
-            )
+            ),
         )
         notification = result.scalars().first()
         if notification is None:

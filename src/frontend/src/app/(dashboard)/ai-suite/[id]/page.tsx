@@ -68,16 +68,20 @@ const statusConfig: Record<AgentStatus, { label: string; className: string }> = 
 };
 
 const capabilityLabels: Record<AgentCapability, string> = {
-  content_generation: 'Content Generation',
+  'content-generation': 'Content Generation',
   classification: 'Classification',
-  sentiment_analysis: 'Sentiment Analysis',
-  lead_scoring: 'Lead Scoring',
+  'sentiment-analysis': 'Sentiment Analysis',
+  'lead-scoring': 'Lead Scoring',
   email_composer: 'Email Composer',
   chat: 'Chat',
   summarization: 'Summarization',
   translation: 'Translation',
   image_analysis: 'Image Analysis',
   recommendation: 'Recommendation',
+  'intent-detection': 'Intent Detection',
+  'ab-testing': 'A/B Testing',
+  'segment-analysis': 'Segment Analysis',
+  forecasting: 'Forecasting',
 };
 
 // ─── Agent Detail Page ────────────────────────────────────────
@@ -126,7 +130,7 @@ export default function AgentDetailPage() {
   const fetchConversations = useCallback(async () => {
     setConversationsLoading(true);
     try {
-      const res = await aiApi.listConversations({ agent_id: id, limit: 10 });
+      const res = await aiApi.listConversations(id, { page: 1, limit: 10 });
       setConversations(res.data || []);
     } catch {
       setConversations([]);
@@ -196,7 +200,7 @@ export default function AgentDetailPage() {
     if (!agent) return;
     const newStatus = agent.status === 'paused' ? 'idle' : 'paused';
     try {
-      await aiApi.updateAgent(id, { is_active: newStatus !== 'paused' });
+      await aiApi.updateAgent(id, { status: newStatus });
       toast.success(`Agent ${newStatus === 'paused' ? 'paused' : 'resumed'}`);
       fetchAgent();
     } catch (err) {

@@ -1,5 +1,4 @@
-"""
-Feature flags for Aegis Marketing Cloud.
+"""Feature flags for Aegis Marketing Cloud.
 
 Defines:
 - FeatureFlag enum with all application features
@@ -11,15 +10,12 @@ Defines:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any
-
-from app.config import settings
+from enum import StrEnum
 
 # ── Feature Flag Enum ────────────────────────────────────────────────────────
 
 
-class FeatureFlag(str, Enum):
+class FeatureFlag(StrEnum):
     """All feature flags in the application."""
 
     AI_AGENTS = "ai_agents"
@@ -217,7 +213,10 @@ class FeatureFlagService:
         return tenant_tier in definition.default_enabled_tiers
 
     def set_override(
-        self, tenant_id: str, feature: FeatureFlag, enabled: bool
+        self,
+        tenant_id: str,
+        feature: FeatureFlag,
+        enabled: bool,
     ) -> None:
         """Set a per-tenant override for a feature flag."""
         if tenant_id not in self._tenant_overrides:

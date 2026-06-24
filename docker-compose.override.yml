@@ -1,0 +1,39 @@
+# ─────────────────────────────────────────────────────────
+# Aegis Marketing Cloud — Docker Compose Dev Override
+# ─────────────────────────────────────────────────────────
+# Auto-merged by `docker compose up` when present alongside
+# docker-compose.yml.  Provides a lightweight local-dev
+# profile with fixed DB credentials and migration auto-run.
+# ─────────────────────────────────────────────────────────
+
+services:
+  # ─── Database ────────────────────────────────────────
+  postgres:
+    environment:
+      POSTGRES_DB: aegis_marketing_cloud
+      POSTGRES_USER: amc
+      POSTGRES_PASSWORD: amc_secret
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U amc -d aegis_marketing_cloud"]
+
+  # ─── API / Backend ────────────────────────────────────
+  backend:
+    build:
+      target: development
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://amc:amc_secret@postgres:5432/aegis_marketing_cloud
+      REDIS_URL: redis://:aegis_redis@redis:6379/0
+    volumes:
+      - ./src/backend:/app
+    command: [""]  # cleared — entrypoint handles runtime
+    entrypoint: /app/scripts/entrypoint.sh
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # ─── Lightweight: only DB + cache for local dev ─────
+  # qdrant, minio, rabbitmq, n8n, vault, prometheus,
+  # grafana, loki, promtail, mailpit, frontend removed.

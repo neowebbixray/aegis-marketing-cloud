@@ -62,6 +62,15 @@ vi.mock('@/stores/auth-store', () => ({
   ),
 }));
 
+const makeMockUser = () => ({
+  id: 'user-1',
+  email: 'test@example.com',
+  name: 'Test User',
+  display_name: 'Test User',
+  roles: ['admin'],
+  is_active: true,
+});
+
 describe('useAuth', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -82,15 +91,7 @@ describe('useAuth', () => {
       expires_in: 3600,
     };
 
-    const mockUser = {
-      id: 'user-1',
-      email: 'test@example.com',
-      display_name: 'Test User',
-      roles: ['admin'],
-      is_active: true,
-      created_at: '2024-01-01T00:00:00Z',
-      updated_at: '2024-01-01T00:00:00Z',
-    };
+    const mockUser = makeMockUser();
 
     vi.mocked(authApi.login).mockResolvedValueOnce(mockTokens);
     vi.mocked(authApi.me).mockResolvedValueOnce(mockUser);
@@ -169,15 +170,7 @@ describe('useAuth', () => {
       expires_in: 3600,
     };
 
-    const mockUser = {
-      id: 'user-1',
-      email: 'test@example.com',
-      display_name: 'Test User',
-      roles: ['admin'],
-      is_active: true,
-      created_at: '2024-01-01T00:00:00Z',
-      updated_at: '2024-01-01T00:00:00Z',
-    };
+    const mockUser = makeMockUser();
 
     vi.mocked(authApi.refresh).mockResolvedValueOnce(mockTokens);
     vi.mocked(authApi.me).mockResolvedValueOnce(mockUser);

@@ -1,5 +1,4 @@
-"""
-Factory classes for media models:
+"""Factory classes for media models:
 Asset.
 """
 
@@ -8,9 +7,8 @@ from __future__ import annotations
 import uuid
 
 import factory
-from factory.alchemy import SQLAlchemyModelFactory
-
 from app.models.media import Asset
+from factory.alchemy import SQLAlchemyModelFactory
 
 
 class BaseFactory(SQLAlchemyModelFactory):
@@ -30,19 +28,21 @@ class MediaAssetFactory(BaseFactory):
     tenant_id = factory.LazyFunction(uuid.uuid4)
     user_id = factory.LazyFunction(uuid.uuid4)
     filename = factory.LazyAttribute(
-        lambda o: f"{uuid.uuid4().hex}_{o.original_filename}"
+        lambda o: f"{uuid.uuid4().hex}_{o.original_filename}",
     )
     original_filename = factory.Faker("file_name")
-    mime_type = factory.Iterator([
-        "image/jpeg",
-        "image/png",
-        "application/pdf",
-        "video/mp4",
-        "audio/mpeg",
-    ])
+    mime_type = factory.Iterator(
+        [
+            "image/jpeg",
+            "image/png",
+            "application/pdf",
+            "video/mp4",
+            "audio/mpeg",
+        ]
+    )
     size_bytes = factory.Faker("random_int", min=1024, max=10485760)
     storage_path = factory.LazyAttribute(
-        lambda o: f"{o.tenant_id}/uncategorised/{o.filename}"
+        lambda o: f"{o.tenant_id}/uncategorised/{o.filename}",
     )
     storage_backend = "local"
     category = factory.Iterator(["images", "documents", "videos", "marketing", None])

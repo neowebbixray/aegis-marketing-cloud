@@ -4,7 +4,7 @@
 # Developer workflow commands for local development, testing, and deployment.
 # =============================================================================
 
-SHELL := /bin/bash
+SHELL := bash
 .ONESHELL:
 .SHELLFLAGS := -eu -o pipefail -c
 .DELETE_ON_ERROR:
@@ -17,9 +17,7 @@ FRONTEND_DIR := src/frontend
 DEPLOY_DIR   := deployment
 
 # ── Docker Compose ──────────────────────────────────────────────────────────
-COMPOSE_FILE   := $(DEPLOY_DIR)/docker-compose.yml
-COMPOSE_OVERRIDE := $(DEPLOY_DIR)/docker-compose.override.yml
-COMPOSE_CMD    := docker compose -f $(COMPOSE_FILE) -f $(COMPOSE_OVERRIDE)
+COMPOSE_CMD    := docker compose
 
 # ── Help ────────────────────────────────────────────────────────────────────
 .PHONY: help
@@ -171,7 +169,10 @@ migrate-create-local: ## Create migration locally (usage: make migrate-create-lo
 
 seed: ## Run seed data scripts
 	@echo "🌱 Seeding development data..."
-	@echo "✅ Seed complete (seed script TBD)"
+	uv run python src/backend/scripts/seed.py
+	@echo "✅ Seed complete"
+
+seed-dev: seed ## Alias for seed
 
 # ── Testing ─────────────────────────────────────────────────────────────────
 .PHONY: test test-backend test-frontend test-all test-coverage

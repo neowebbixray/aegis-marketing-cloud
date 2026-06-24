@@ -55,10 +55,7 @@ def _build_tsvector_update(table: str, weight_map: dict[str, list[str]]) -> str:
         cols = weight_map.get(weight, [])
         for col in cols:
             parts.append(
-                (
-                    f"setweight("
-                    f"to_tsvector('english', coalesce({col}, '')), '{weight}')"
-                )
+                f"setweight(to_tsvector('english', coalesce({col}, '')), '{weight}')",
             )
     return " || ".join(parts)
 
@@ -70,7 +67,7 @@ async def update_contact_search_index(db: AsyncSession, contact_id: UUID) -> Non
     """Update the tsvector for a single contact."""
     expr = _build_tsvector_update("contacts", CONTACT_VECTOR_COLS)
     stmt = text(
-        f"UPDATE contacts SET search_vector = {expr} WHERE id = :id"
+        f"UPDATE contacts SET search_vector = {expr} WHERE id = :id",
     ).bindparams(id=contact_id)
     await db.execute(stmt)
     await db.flush()
@@ -81,7 +78,7 @@ async def update_deal_search_index(db: AsyncSession, deal_id: UUID) -> None:
     """Update the tsvector for a single deal."""
     expr = _build_tsvector_update("deals", DEAL_VECTOR_COLS)
     stmt = text(
-        f"UPDATE deals SET search_vector = {expr} WHERE id = :id"
+        f"UPDATE deals SET search_vector = {expr} WHERE id = :id",
     ).bindparams(id=deal_id)
     await db.execute(stmt)
     await db.flush()
@@ -92,7 +89,7 @@ async def update_campaign_search_index(db: AsyncSession, campaign_id: UUID) -> N
     """Update the tsvector for a single campaign."""
     expr = _build_tsvector_update("campaigns", CAMPAIGN_VECTOR_COLS)
     stmt = text(
-        f"UPDATE campaigns SET search_vector = {expr} WHERE id = :id"
+        f"UPDATE campaigns SET search_vector = {expr} WHERE id = :id",
     ).bindparams(id=campaign_id)
     await db.execute(stmt)
     await db.flush()
@@ -114,7 +111,7 @@ async def reindex_all(db: AsyncSession) -> dict[str, int]:
         expr = _build_tsvector_update(table, weight_map)
         stmt = text(
             f"UPDATE {table} SET search_vector = {expr} "
-            f"WHERE search_vector IS DISTINCT FROM ({expr})"
+            f"WHERE search_vector IS DISTINCT FROM ({expr})",
         )
         result = await db.execute(stmt)
         await db.flush()

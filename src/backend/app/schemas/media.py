@@ -1,41 +1,39 @@
-"""
-Pydantic schemas for the Media module: assets, upload metadata, thumbnails.
-"""
+"""Pydantic schemas for the Media module: assets, upload metadata, thumbnails."""
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-
 # ── Asset ─────────────────────────────────────────────────────────────────────
+
 
 class AssetResponse(BaseModel):
     """Asset representation returned by the API."""
 
     id: UUID
     tenant_id: UUID
-    user_id: Optional[UUID] = None
+    user_id: UUID | None = None
     filename: str
     original_filename: str
     mime_type: str
     size_bytes: int
     storage_path: str
     storage_backend: str
-    category: Optional[str] = None
-    alt_text: Optional[str] = None
-    width: Optional[int] = None
-    height: Optional[int] = None
-    duration_seconds: Optional[int] = None
-    metadata: Optional[dict[str, Any]] = None
+    category: str | None = None
+    alt_text: str | None = None
+    width: int | None = None
+    height: int | None = None
+    duration_seconds: int | None = None
+    metadata: dict[str, Any] | None = None
     is_public: bool = False
-    checksum: Optional[str] = None
+    checksum: str | None = None
     created_at: datetime
     updated_at: datetime
-    deleted_at: Optional[datetime] = None
+    deleted_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -43,22 +41,23 @@ class AssetResponse(BaseModel):
 class AssetUploadMetadata(BaseModel):
     """Metadata that can be supplied during asset upload."""
 
-    category: Optional[str] = Field(None, max_length=50)
-    alt_text: Optional[str] = Field(None, max_length=1000)
+    category: str | None = Field(None, max_length=50)
+    alt_text: str | None = Field(None, max_length=1000)
     is_public: bool = False
-    metadata: Optional[dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
 
 class AssetUpdate(BaseModel):
     """Payload for PATCH /media/{id}. All fields optional."""
 
-    category: Optional[str] = Field(None, max_length=50)
-    alt_text: Optional[str] = Field(None, max_length=1000)
-    is_public: Optional[bool] = None
-    metadata: Optional[dict[str, Any]] = None
+    category: str | None = Field(None, max_length=50)
+    alt_text: str | None = Field(None, max_length=1000)
+    is_public: bool | None = None
+    metadata: dict[str, Any] | None = None
 
 
 # ── Batch ─────────────────────────────────────────────────────────────────────
+
 
 class BatchDeleteRequest(BaseModel):
     """Payload for DELETE /media/batch."""
@@ -75,6 +74,7 @@ class BatchDeleteResponse(BaseModel):
 
 # ── Thumbnail ─────────────────────────────────────────────────────────────────
 
+
 class ThumbnailParams(BaseModel):
     """Query parameters for thumbnail generation."""
 
@@ -83,6 +83,7 @@ class ThumbnailParams(BaseModel):
 
 
 # ── Download URL ──────────────────────────────────────────────────────────────
+
 
 class DownloadUrlResponse(BaseModel):
     """Response containing a download URL."""

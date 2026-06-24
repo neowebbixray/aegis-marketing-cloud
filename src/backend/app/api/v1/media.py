@@ -1,5 +1,4 @@
-"""
-Media router: upload, download, thumbnail, and manage digital assets.
+"""Media router: upload, download, thumbnail, and manage digital assets.
 
 All list responses use the docs-mandated ``{data, meta, links}`` envelope.
 All single-resource responses use ``{data: {...}}``.
@@ -8,10 +7,9 @@ All single-resource responses use ``{data: {...}}``.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request, UploadFile, File, Form
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +22,6 @@ from app.schemas.media import (
     BatchDeleteRequest,
     BatchDeleteResponse,
     DownloadUrlResponse,
-    ThumbnailParams,
 )
 from app.services.media import MediaService
 
@@ -40,8 +37,8 @@ router = APIRouter(prefix="/media", tags=["media"])
 async def upload_media(
     request: Request,
     file: UploadFile = File(...),
-    category: Optional[str] = Form(None),
-    alt_text: Optional[str] = Form(None),
+    category: str | None = Form(None),
+    alt_text: str | None = Form(None),
     is_public: bool = Form(False),
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
@@ -70,8 +67,8 @@ async def upload_media(
 async def upload_media_multiple(
     request: Request,
     files: list[UploadFile] = File(...),
-    category: Optional[str] = Form(None),
-    alt_text: Optional[str] = Form(None),
+    category: str | None = Form(None),
+    alt_text: str | None = Form(None),
     is_public: bool = Form(False),
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
@@ -104,9 +101,9 @@ async def list_media(
     request: Request,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
-    category: Optional[str] = Query(None, max_length=50),
-    mime_type: Optional[str] = Query(None, max_length=100),
-    search: Optional[str] = Query(None, min_length=1, max_length=256),
+    category: str | None = Query(None, max_length=50),
+    mime_type: str | None = Query(None, max_length=100),
+    search: str | None = Query(None, min_length=1, max_length=256),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=200),
 ) -> dict:
@@ -176,6 +173,7 @@ async def download_media(
     if asset.storage_backend == "minio":
         url = await service.get_download_url(asset_id, tenant_id)
         from fastapi.responses import RedirectResponse
+
         return RedirectResponse(url=url)
 
     # Local storage -> stream directly
@@ -215,7 +213,7 @@ async def get_media_download_url(
             expires_in=expires_in,
             filename=asset.original_filename,
             mime_type=asset.mime_type,
-        )
+        ),
     )
 
 
@@ -292,7 +290,6 @@ async def delete_media(
     tenant_id = await get_tenant_context(request, current_user=current_user)
     service = MediaService(db)
     await service.delete_asset(asset_id, tenant_id=tenant_id)
-    return None
 
 
 # ── Batch delete ─────────────────────────────────────────────────────────────
@@ -319,5 +316,5 @@ async def batch_delete_media(
         BatchDeleteResponse(
             deleted_count=deleted_count,
             asset_ids=deleted_ids,
-        )
+        ),
     )

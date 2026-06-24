@@ -1,5 +1,4 @@
-"""
-Factory classes for AI Agent models:
+"""Factory classes for AI Agent models:
 AIAgent, KnowledgeDocument, Conversation.
 """
 
@@ -8,9 +7,8 @@ from __future__ import annotations
 import uuid
 
 import factory
-from factory.alchemy import SQLAlchemyModelFactory
-
 from app.models.ai import AIAgent, Conversation, KnowledgeDocument
+from factory.alchemy import SQLAlchemyModelFactory
 
 
 class BaseFactory(SQLAlchemyModelFactory):
@@ -30,24 +28,35 @@ class AIAgentFactory(BaseFactory):
     tenant_id = factory.LazyFunction(uuid.uuid4)
     name = factory.Faker("sentence", nb_words=3)
     slug = factory.Sequence(lambda n: f"agent-{n}")
-    agent_type = factory.Iterator([
-        "chatbot", "assistant", "workflow", "analyst",
-    ])
+    agent_type = factory.Iterator(
+        [
+            "chatbot",
+            "assistant",
+            "workflow",
+            "analyst",
+        ]
+    )
     description = factory.Faker("sentence", nb_words=10)
     system_prompt = factory.Faker("paragraph", nb_sentences=6)
-    configuration = factory.Dict({
-        "model": "gpt-4o",
-        "temperature": 0.7,
-        "max_tokens": 2048,
-    })
+    configuration = factory.Dict(
+        {
+            "model": "gpt-4o",
+            "temperature": 0.7,
+            "max_tokens": 2048,
+        }
+    )
     tools = factory.List(["search_knowledge", "get_weather"])
-    memory_config = factory.Dict({
-        "type": "sliding_window",
-        "window_size": 20,
-    })
-    guardrails = factory.List([
-        {"type": "topic_filter", "blocked_topics": ["competitor_pricing"]},
-    ])
+    memory_config = factory.Dict(
+        {
+            "type": "sliding_window",
+            "window_size": 20,
+        }
+    )
+    guardrails = factory.List(
+        [
+            {"type": "topic_filter", "blocked_topics": ["competitor_pricing"]},
+        ]
+    )
     is_active = True
     is_public = False
     version = 1
@@ -64,15 +73,32 @@ class KnowledgeDocumentFactory(BaseFactory):
     tenant_id = factory.LazyFunction(uuid.uuid4)
     title = factory.Faker("sentence", nb_words=4)
     content = factory.Faker("paragraph", nb_sentences=10)
-    doc_type = factory.Iterator([
-        "article", "faq", "guide", "policy", "integration_doc",
-    ])
-    source = factory.Iterator([
-        "manual", "import", "generated", "web_scrape",
-    ])
-    category = factory.Iterator([
-        "product", "support", "sales", "engineering", "compliance",
-    ])
+    doc_type = factory.Iterator(
+        [
+            "article",
+            "faq",
+            "guide",
+            "policy",
+            "integration_doc",
+        ]
+    )
+    source = factory.Iterator(
+        [
+            "manual",
+            "import",
+            "generated",
+            "web_scrape",
+        ]
+    )
+    category = factory.Iterator(
+        [
+            "product",
+            "support",
+            "sales",
+            "engineering",
+            "compliance",
+        ]
+    )
     tags = factory.List(["knowledge-base", "reference"])
     metadata = factory.Dict({"author": "AI Generator", "version": "1.0"})
     embedding_id = None

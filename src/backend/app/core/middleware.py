@@ -1,24 +1,21 @@
-"""
-Custom ASGI middleware for request ID tracing, tenant context extraction,
+"""Custom ASGI middleware for request ID tracing, tenant context extraction,
 rate limiting, and structured logging.
+
+All middleware classes are pure ASGI middleware (not BaseHTTPMiddleware) to
+avoid event-loop issues with httpx.AsyncClient in tests.
 """
 
 from __future__ import annotations
 
+import logging
 import time
 import uuid
-from collections.abc import Awaitable, Callable
 from typing import Any
 
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
 from starlette.status import HTTP_429_TOO_MANY_REQUESTS
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.config import settings
-from app.schemas.base import build_problem_response
-
 
 # ── Rate Limit Tier Helpers ──────────────────────────────────────────────────
 
@@ -68,53 +65,85 @@ def _resolve_rate_limits(identity: str) -> tuple[int, int]:
 
 
 # ── Request ID Middleware ────────────────────────────────────────────────────
-class RequestIDMiddleware(BaseHTTPMiddleware):
-    """Ensure every request has an ``X-Request-ID`` header.
+
+
+class RequestIDMiddleware:
+    """Pure ASGI middleware — ensures every request has an ``X-Request-ID``.
 
     If the client provides one it is used; otherwise a new UUID is generated.
     The value is also stored at ``request.state.request_id``.
     """
 
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
-        request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
-        request.state.request_id = request_id
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = request_id
-        return response
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request_id = None
+        # Extract X-Request-ID from request headers
+        for name, value in scope.get("headers", []):
+            if name.lower() == b"x-request-id":
+                request_id = value.decode("utf-8")
+                break
+
+        if not request_id:
+            request_id = uuid.uuid4().hex
+
+        # Store request_id in scope state
+        scope.setdefault("state", {})
+        scope["state"]["request_id"] = request_id
+
+        request_id_bytes = request_id.encode("utf-8")
+
+        async def send_wrapper(message: dict[str, Any]) -> None:
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.append((b"X-Request-ID", request_id_bytes))
+                message["headers"] = headers
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
 
 
 # ── Tenant Context Middleware ────────────────────────────────────────────────
-class TenantContextMiddleware(BaseHTTPMiddleware):
-    """Parse ``X-Tenant-ID`` and ``X-Workspace-ID`` headers into request state.
 
-    Values are stored at ``request.state.tenant_id`` and
-    ``request.state.workspace_id`` (both optional strings).
+
+class TenantContextMiddleware:
+    """Pure ASGI middleware — parse ``X-Tenant-ID`` and ``X-Workspace-ID`` headers.
+
+    Values are stored at ``scope.state.tenant_id`` and
+    ``scope.state.workspace_id`` (both optional strings).
     """
 
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
-        request.state.tenant_id = request.headers.get("X-Tenant-ID")
-        request.state.workspace_id = request.headers.get("X-Workspace-ID")
-        return await call_next(request)
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        tenant_id = None
+        workspace_id = None
+        for name, value in scope.get("headers", []):
+            if name.lower() == b"x-tenant-id":
+                tenant_id = value.decode("utf-8")
+            elif name.lower() == b"x-workspace-id":
+                workspace_id = value.decode("utf-8")
+
+        scope.setdefault("state", {})
+        scope["state"]["tenant_id"] = tenant_id
+        scope["state"]["workspace_id"] = workspace_id
+
+        await self.app(scope, receive, send)
 
 
 # ── Rate Limiting Middleware ─────────────────────────────────────────────────
+
 # Redis Lua script for atomic sliding-window rate-limit check-and-add.
-#
-# Keys:  1 — rate_limit:<identity>:<path>
-# Args:  now (str), window (str), limit (str)
-# Returns:
-#   {1, current_count, now}          — allowed (request counted)
-#   {0, current_count, oldest_score} — denied  (rate limit exceeded)
-#
-# The script:
-#   1. Removes entries outside [now - window, now]
-#   2. Counts remaining entries
-#   3. If count >= limit, returns denied + oldest score (for Retry-After)
-#   4. Otherwise, adds current timestamp and sets TTL, returns allowed
 _RATE_LIMIT_LUA = """
 local key = KEYS[1]
 local now = tonumber(ARGV[1])
@@ -147,8 +176,8 @@ return {1, count + 1, now}
 """
 
 
-class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Redis-backed sliding window rate limiter.
+class RateLimitMiddleware:
+    """Pure ASGI — Redis-backed sliding window rate limiter.
 
     Uses a Redis sorted set per ``(tenant_id | client_ip, endpoint_path)`` to
     track request timestamps. On each request, the set is trimmed to the
@@ -157,16 +186,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     When ``settings.rate_limit_enabled`` is ``False``, all requests pass through
     without any rate check.
-
-    Rate limit headers (``X-RateLimit-Limit``, ``X-RateLimit-Remaining``,
-    ``X-RateLimit-Reset``) are added to every response.  When the limit is
-    exceeded, a ``429 Too Many Requests`` response is returned with an RFC 7807
-    problem detail body and a ``Retry-After`` header.
     """
 
     def __init__(self, app: ASGIApp) -> None:
-        super().__init__(app)
-        self._redis: Any = None  # redis.asyncio.Redis | None — lazily imported
+        self.app = app
+        self._redis: Any = None  # redis.asyncio.Redis | None
         self._script_hash: str | None = None
 
     async def _get_redis(self) -> Any:
@@ -187,142 +211,202 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             self._script_hash = await r.script_load(_RATE_LIMIT_LUA)
         return self._script_hash
 
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
-        # ── Short-circuit if rate limiting is disabled ────────────────
-        if not settings.rate_limit_enabled:
-            return await call_next(request)
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-        # ── Resolve identity ──────────────────────────────────────────
-        tenant_id: str | None = getattr(request.state, "tenant_id", None)
+        # Short-circuit if rate limiting is disabled
+        if not settings.rate_limit_enabled:
+            await self.app(scope, receive, send)
+            return
+
+        # Extract identity and path from scope
+        headers = dict(scope.get("headers", []))
+        state = scope.get("state", {})
+
+        tenant_id: str | None = state.get("tenant_id")
         if tenant_id:
             identity = tenant_id
         else:
-            forwarded = request.headers.get("X-Forwarded-For")
+            forwarded = headers.get(b"x-forwarded-for", b"").decode("utf-8")
             if forwarded:
                 identity = forwarded.split(",")[0].strip()
-            elif request.client is not None:
-                identity = request.client.host
             else:
-                identity = "unknown"
+                identity = headers.get(b"host", b"unknown").decode("utf-8")
 
-        # Check for a tier hint in the request header (e.g. X-RateLimit-Tier)
-        tier_hint = request.headers.get("X-RateLimit-Tier", "").lower()
-        if tier_hint in _TIER_LIMITS:
-            identity_with_tier = f"{identity}:{tier_hint}"
-        else:
-            identity_with_tier = identity
+        # Check for a tier hint
+        tier_hint_bytes = headers.get(b"x-rate-limit-tier", b"")
+        tier_hint = tier_hint_bytes.decode("utf-8").lower()
+        identity_with_tier = f"{identity}:{tier_hint}" if tier_hint in _TIER_LIMITS else identity
 
-        # ── Resolve limits for this identity ──────────────────────────
         per_minute, per_hour = _resolve_rate_limits(identity_with_tier)
 
         now = time.time()
-        window_min = 60  # 1-minute window
-        window_hour = 3600  # 1-hour window
+        window_min = 60
+        window_hour = 3600
+        path = scope.get("path", "/unknown")
 
-        # ── Atomic check-and-increment via Lua script ─────────────────
         try:
             r = await self._get_redis()
             script_hash = await self._load_script(r)
-            path = request.url.path
 
-            # Check 1-minute window
             key_min = f"rate_limit:{identity}:{path}:min"
             allowed_min, count_min, oldest_min = await r.evalsha(
-                script_hash, 1, key_min, float(now), float(window_min), float(per_minute)
+                script_hash,
+                1,
+                key_min,
+                float(now),
+                float(window_min),
+                float(per_minute),
             )
             allowed_min = bool(allowed_min)
             count_min = int(count_min)
 
-            # Check 1-hour window (skip if per_hour is 0 = unlimited)
             allowed_hour = True
             count_hour = 0
             if per_hour > 0:
                 key_hour = f"rate_limit:{identity}:{path}:hour"
                 allowed_hour, count_hour, _oldest_hour = await r.evalsha(
-                    script_hash, 1, key_hour, float(now), float(window_hour), float(per_hour)
+                    script_hash,
+                    1,
+                    key_hour,
+                    float(now),
+                    float(window_hour),
+                    float(per_hour),
                 )
                 allowed_hour = bool(allowed_hour)
                 count_hour = int(count_hour)
 
         except Exception:
-            # Degrade gracefully — if Redis is unavailable let the
-            # request through rather than blocking all traffic.
-            return await call_next(request)
+            # Degrade gracefully
+            await self.app(scope, receive, send)
+            return
 
-        # ── Rate limit exceeded → 429 ─────────────────────────────────
         if not allowed_min or not allowed_hour:
-            # Calculate the shortest retry-after from both windows
             if not allowed_min:
                 retry_after = max(1, int(float(oldest_min) + window_min - now + 0.5))
             else:
                 retry_after = max(1, int(window_hour))
 
-            response = build_problem_response(
-                status_code=HTTP_429_TOO_MANY_REQUESTS,
-                title="Rate Limit Exceeded",
-                detail=f"Too many requests. Try again in {retry_after} second(s).",
-                request=request,
+            # Build 429 response — inline JSON to avoid Request dependency
+            import json
+            from uuid import uuid4
+
+            from app.schemas.base import ERROR_TYPE_BASE, ERROR_TYPE_PATHS
+
+            type_path = ERROR_TYPE_PATHS.get(HTTP_429_TOO_MANY_REQUESTS, "rate-limit-error")
+            body_payload = {
+                "error": {
+                    "type": f"{ERROR_TYPE_BASE}/{type_path}",
+                    "title": "Rate Limit Exceeded",
+                    "status": HTTP_429_TOO_MANY_REQUESTS,
+                    "detail": f"Too many requests. Try again in {retry_after} second(s).",
+                    "trace_id": uuid4().hex[:12],
+                },
+            }
+            body_bytes = json.dumps(body_payload).encode("utf-8")
+            headers = [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body_bytes)).encode("utf-8")),
+                (b"Retry-After", str(retry_after).encode("utf-8")),
+                (
+                    b"X-RateLimit-Limit",
+                    str(per_minute if not allowed_min else per_hour).encode("utf-8"),
+                ),
+                (b"X-RateLimit-Remaining", b"0"),
+                (b"X-RateLimit-Reset", str(int(now + retry_after)).encode("utf-8")),
+                (b"X-RateLimit-Tier", (tier_hint or "free").encode("utf-8")),
+            ]
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": HTTP_429_TOO_MANY_REQUESTS,
+                    "headers": headers,
+                }
             )
-            # Determine which limit was hit
-            limit_exceeded = per_minute if not allowed_min else per_hour
-            response.headers["Retry-After"] = str(retry_after)
-            response.headers["X-RateLimit-Limit"] = str(limit_exceeded)
-            response.headers["X-RateLimit-Remaining"] = "0"
-            response.headers["X-RateLimit-Reset"] = str(int(now + retry_after))
-            response.headers["X-RateLimit-Tier"] = tier_hint if tier_hint else "free"
-            return response
+            await send({"type": "http.response.body", "body": body_bytes})
+            return
 
-        # ── Within limit → forward request ───────────────────────────
-        response = await call_next(request)
+        # Within limit — forward request and attach headers
+        captured_status = [0]
 
-        # Attach rate-limit headers to the real response
-        remaining = max(0, per_minute - count_min)
-        response.headers["X-RateLimit-Limit"] = str(per_minute)
-        response.headers["X-RateLimit-Remaining"] = str(remaining)
-        response.headers["X-RateLimit-Reset"] = str(int(now + window_min))
-        response.headers["X-RateLimit-Hour-Limit"] = str(per_hour)
-        response.headers["X-RateLimit-Hour-Remaining"] = str(
-            max(0, per_hour - count_hour)
-        ) if per_hour > 0 else "unlimited"
-        response.headers["X-RateLimit-Tier"] = tier_hint if tier_hint else "free"
+        async def send_wrapper(message: dict[str, Any]) -> None:
+            if message["type"] == "http.response.start":
+                captured_status[0] = message.get("status", 0)
+                headers_list = list(message.get("headers", []))
+                remaining = max(0, per_minute - count_min)
+                headers_list.append((b"X-RateLimit-Limit", str(per_minute).encode("utf-8")))
+                headers_list.append((b"X-RateLimit-Remaining", str(remaining).encode("utf-8")))
+                headers_list.append(
+                    (b"X-RateLimit-Reset", str(int(now + window_min)).encode("utf-8"))
+                )
+                per_hour_str = str(per_hour).encode("utf-8")
+                headers_list.append((b"X-RateLimit-Hour-Limit", per_hour_str))
+                remaining_hour = (
+                    str(max(0, per_hour - count_hour)).encode("utf-8")
+                    if per_hour > 0
+                    else b"unlimited"
+                )
+                headers_list.append((b"X-RateLimit-Hour-Remaining", remaining_hour))
+                headers_list.append((b"X-RateLimit-Tier", (tier_hint or "free").encode("utf-8")))
+                message["headers"] = headers_list
+            await send(message)
 
-        return response
+        await self.app(scope, receive, send_wrapper)
 
 
 # ── Logging Middleware ───────────────────────────────────────────────────────
-class LoggingMiddleware(BaseHTTPMiddleware):
-    """Log structured request / response summaries.
+
+
+class LoggingMiddleware:
+    """Pure ASGI middleware that logs structured request / response summaries.
 
     Emits a single log line per request with method, path, status, duration,
     request_id, and tenant_id.
     """
 
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
-        import logging
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
         logger = logging.getLogger("amc.access")
 
         start = time.monotonic()
-        response = await call_next(request)
+        state = scope.get("state", {})
+        method = scope.get("method", "UNKNOWN")
+        path = scope.get("path", "/unknown")
+        request_id = state.get("request_id")
+        tenant_id = state.get("tenant_id")
+
+        captured_status = [0]
+
+        async def send_wrapper(message: dict[str, Any]) -> None:
+            if message["type"] == "http.response.start":
+                captured_status[0] = message.get("status", 0)
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
         elapsed = time.monotonic() - start
+        status = captured_status[0]
 
         logger.info(
             "%s %s %s %.4fs",
-            request.method,
-            request.url.path,
-            response.status_code,
+            method,
+            path,
+            status,
             elapsed,
             extra={
-                "request_id": getattr(request.state, "request_id", None),
-                "tenant_id": getattr(request.state, "tenant_id", None),
-                "method": request.method,
-                "path": request.url.path,
-                "status": response.status_code,
+                "request_id": request_id,
+                "tenant_id": tenant_id,
+                "method": method,
+                "path": path,
+                "status": status,
                 "duration_ms": round(elapsed * 1000, 2),
             },
         )
-        return response

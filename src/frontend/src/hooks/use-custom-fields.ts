@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { customFieldsApi } from '@/lib/api';
+import { customFieldsApi } from '@/lib/api/api';
 import type {
   CustomFieldDefinition,
   CreateCustomFieldDefinitionRequest,

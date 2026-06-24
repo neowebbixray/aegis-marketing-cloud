@@ -1,18 +1,16 @@
-"""
-Factory classes for auth / identity models:
+"""Factory classes for auth / identity models:
 User, ApiKey, Session.
 """
 
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import factory
-from factory.alchemy import SQLAlchemyModelFactory
-
 from app.core.security import hash_password
 from app.models.auth import ApiKey, Session, User
+from factory.alchemy import SQLAlchemyModelFactory
 
 
 class BaseFactory(SQLAlchemyModelFactory):
@@ -46,7 +44,7 @@ class UserFactory(BaseFactory):
     is_superadmin = False
     metadata_jsonb = factory.Dict({"source": "factory"})
     last_login_at = factory.LazyFunction(
-        lambda: datetime.now(timezone.utc) - timedelta(hours=2)
+        lambda: datetime.now(UTC) - timedelta(hours=2),
     )
     # TenantMixin — tenant_id is set by fixtures or SubFactory
     tenant_id = factory.LazyFunction(uuid.uuid4)
@@ -60,11 +58,13 @@ class ApiKeyFactory(BaseFactory):
 
     user_id = factory.LazyFunction(uuid.uuid4)
     name = factory.Faker("sentence", nb_words=3)
-    key_prefix = factory.LazyFunction(lambda: "amc_" + factory.Faker("hexify", text="^^^^^^^^").generate())
+    key_prefix = factory.LazyFunction(
+        lambda: "amc_" + factory.Faker("hexify", text="^^^^^^^^").generate()
+    )
     key_hash = factory.Faker("sha256")
     scopes = factory.List(["read", "write"])
     expires_at = factory.LazyFunction(
-        lambda: datetime.now(timezone.utc) + timedelta(days=90)
+        lambda: datetime.now(UTC) + timedelta(days=90),
     )
     last_used_at = None
     revoked_at = None
@@ -83,7 +83,7 @@ class SessionFactory(BaseFactory):
     user_agent = factory.Faker("user_agent")
     ip_address = factory.Faker("ipv4")
     expires_at = factory.LazyFunction(
-        lambda: datetime.now(timezone.utc) + timedelta(days=7)
+        lambda: datetime.now(UTC) + timedelta(days=7),
     )
     revoked_at = None
     # TenantMixin

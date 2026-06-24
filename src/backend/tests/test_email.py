@@ -1,6 +1,4 @@
-"""
-Tests for the email endpoints: sending, templates, deliveries, campaigns.
-"""
+"""Tests for the email endpoints: sending, templates, deliveries, campaigns."""
 
 from __future__ import annotations
 

@@ -1,7 +1,15 @@
-# ── Python ─────────────────────────────────────────────────────────────────
+# ─── Aegis Marketing Cloud — Backend .dockerignore ─────────────────────────
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
 *.egg-info/
 dist/
 build/
@@ -9,19 +17,35 @@ build/
 .venv/
 venv/
 env/
+.uv/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.coverage
+.coverage.*
 
-# ── Environment ────────────────────────────────────────────────────────────
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
 .env
 .env.local
 .env.*.local
+*.env
 
-# ── IDE ────────────────────────────────────────────────────────────────────
-.vscode/
-.idea/
-.DS_Store
+# Testing
+tests/coverage.xml
+tests/.pytest_cache/
 
-# ── Testing ────────────────────────────────────────────────────────────────
-.coverage
-htmlcov/
-.pytest_cache/
-test-results/
+# Docker
+Dockerfile
+.dockerignore
+
+# Media (runtime volume)
+media-library/
